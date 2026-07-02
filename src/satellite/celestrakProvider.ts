@@ -27,6 +27,75 @@ export function parseTleText(text: string): TleRecord[] {
   return records
 }
 
+export type TleParseResult = { ok: true; record: TleRecord } | { ok: false; error: string }
+
+/** Sum of digits (dashes count as 1, everything else as 0), mod 10 - the standard TLE line checksum. */
+function tleChecksum(line: string): number {
+  let sum = 0
+  for (const ch of line.slice(0, -1)) {
+    if (ch >= '0' && ch <= '9') sum += Number(ch)
+    else if (ch === '-') sum += 1
+  }
+  return sum % 10
+}
+
+/**
+ * Parses a single manually-pasted TLE: either the 3-line form (name + line 1
+ * + line 2, what Celestrak returns) or the bare 2-line form (no name line,
+ * common when TLEs are shared standalone) - falling back to a placeholder
+ * name derived from the NORAD ID in that case. Validates line prefixes,
+ * length, matching NORAD IDs between the two lines, and each line's checksum,
+ * so a garbled paste is rejected here with a specific reason rather than
+ * failing deep inside satellite.js's propagation path.
+ */
+export function parseTleBlock(text: string): TleParseResult {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+  let name: string | undefined
+  let line1: string
+  let line2: string
+
+  if (lines.length === 2) {
+    ;[line1, line2] = lines
+  } else if (lines.length === 3) {
+    ;[name, line1, line2] = lines
+  } else {
+    return { ok: false, error: `Expected 2 lines (no name) or 3 lines (with name), got ${lines.length}.` }
+  }
+
+  if (!line1.startsWith('1 ')) return { ok: false, error: 'Line 1 must start with "1 ".' }
+  if (!line2.startsWith('2 ')) return { ok: false, error: 'Line 2 must start with "2 ".' }
+
+  if (line1.length < 68 || line1.length > 69 || line2.length < 68 || line2.length > 69) {
+    return { ok: false, error: 'Each line should be 68-69 characters long.' }
+  }
+
+  // TLE columns 3-7 (1-indexed): the NORAD catalog number, present on both lines.
+  const noradIdLine1 = line1.slice(2, 7).trim()
+  const noradIdLine2 = line2.slice(2, 7).trim()
+  if (!/^\d+$/.test(noradIdLine1)) {
+    return { ok: false, error: 'NORAD ID (line 1, columns 3-7) must be numeric.' }
+  }
+  if (noradIdLine1 !== noradIdLine2) {
+    return { ok: false, error: "NORAD IDs on line 1 and line 2 don't match." }
+  }
+
+  if (tleChecksum(line1) !== Number(line1.at(-1))) {
+    return { ok: false, error: 'Line 1 fails its checksum - check for typos.' }
+  }
+  if (tleChecksum(line2) !== Number(line2.at(-1))) {
+    return { ok: false, error: 'Line 2 fails its checksum - check for typos.' }
+  }
+
+  return {
+    ok: true,
+    record: { name: name ?? `Satellite ${noradIdLine1}`, noradId: noradIdLine1, line1, line2 },
+  }
+}
+
 function readCache<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key)

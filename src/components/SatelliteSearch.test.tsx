@@ -78,4 +78,52 @@ describe('SatelliteSearch', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Search' }))
     expect(searchByNameMock).not.toHaveBeenCalled()
   })
+
+  describe('paste TLE mode', () => {
+    function switchToPasteMode() {
+      fireEvent.click(screen.getByRole('button', { name: 'Paste TLE mode' }))
+    }
+
+    it('tracks a valid pasted 3-line TLE', () => {
+      const onSelect = vi.fn()
+      render(<SatelliteSearch selectedTle={null} onSelect={onSelect} />)
+      switchToPasteMode()
+
+      fireEvent.change(screen.getByLabelText('Paste TLE'), {
+        target: { value: `${ISS_TLE.name}\n${ISS_TLE.line1}\n${ISS_TLE.line2}` },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Track' }))
+
+      expect(onSelect).toHaveBeenCalledWith(ISS_TLE)
+    })
+
+    it('tracks a valid pasted 2-line TLE (no name), using a placeholder name', () => {
+      const onSelect = vi.fn()
+      render(<SatelliteSearch selectedTle={null} onSelect={onSelect} />)
+      switchToPasteMode()
+
+      fireEvent.change(screen.getByLabelText('Paste TLE'), {
+        target: { value: `${ISS_TLE.line1}\n${ISS_TLE.line2}` },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Track' }))
+
+      expect(onSelect).toHaveBeenCalledWith({ ...ISS_TLE, name: 'Satellite 25544' })
+    })
+
+    it('shows a specific inline error for malformed input, without crashing', () => {
+      const onSelect = vi.fn()
+      render(<SatelliteSearch selectedTle={null} onSelect={onSelect} />)
+      switchToPasteMode()
+
+      fireEvent.change(screen.getByLabelText('Paste TLE'), {
+        target: { value: 'not a tle at all' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Track' }))
+
+      expect(
+        screen.getByText('Expected 2 lines (no name) or 3 lines (with name), got 1.'),
+      ).toBeInTheDocument()
+      expect(onSelect).not.toHaveBeenCalled()
+    })
+  })
 })

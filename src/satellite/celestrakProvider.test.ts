@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchByNoradId, parseTleText, searchByName } from './celestrakProvider'
+import { fetchByNoradId, parseTleBlock, parseTleText, searchByName } from './celestrakProvider'
 
 const ISS_NAME = 'ISS (ZARYA)'
 const ISS_LINE1 = '1 25544U 98067A   26182.50817465  .00006185  00000+0  11827-3 0  9996'
@@ -33,6 +33,70 @@ describe('parseTleText', () => {
   it('returns an empty array for blank input', () => {
     expect(parseTleText('')).toEqual([])
     expect(parseTleText('   \n\n')).toEqual([])
+  })
+})
+
+describe('parseTleBlock', () => {
+  it('parses a valid 3-line block (with name)', () => {
+    const result = parseTleBlock(`${ISS_NAME}\n${ISS_LINE1}\n${ISS_LINE2}`)
+    expect(result).toEqual({
+      ok: true,
+      record: { name: ISS_NAME, noradId: '25544', line1: ISS_LINE1, line2: ISS_LINE2 },
+    })
+  })
+
+  it('parses a valid 2-line block (no name), using a placeholder name', () => {
+    const result = parseTleBlock(`${ISS_LINE1}\n${ISS_LINE2}`)
+    expect(result).toEqual({
+      ok: true,
+      record: { name: 'Satellite 25544', noradId: '25544', line1: ISS_LINE1, line2: ISS_LINE2 },
+    })
+  })
+
+  it('tolerates surrounding blank lines and whitespace', () => {
+    const result = parseTleBlock(`\n\n  ${ISS_LINE1}  \n  ${ISS_LINE2}  \n\n`)
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects the wrong number of lines', () => {
+    expect(parseTleBlock(ISS_LINE1).ok).toBe(false)
+    expect(parseTleBlock(`${ISS_NAME}\n${ISS_LINE1}\n${ISS_LINE2}\nextra`).ok).toBe(false)
+  })
+
+  it('rejects a line 1 that does not start with "1 "', () => {
+    const badLine1 = `2${ISS_LINE1.slice(1)}`
+    const result = parseTleBlock(`${badLine1}\n${ISS_LINE2}`)
+    expect(result).toEqual({ ok: false, error: 'Line 1 must start with "1 ".' })
+  })
+
+  it('rejects a line 2 that does not start with "2 "', () => {
+    const badLine2 = `1${ISS_LINE2.slice(1)}`
+    const result = parseTleBlock(`${ISS_LINE1}\n${badLine2}`)
+    expect(result).toEqual({ ok: false, error: 'Line 2 must start with "2 ".' })
+  })
+
+  it('rejects lines with implausible length', () => {
+    const result = parseTleBlock(`1 25544U\n2 25544`)
+    expect(result).toEqual({ ok: false, error: 'Each line should be 68-69 characters long.' })
+  })
+
+  it('rejects mismatched NORAD IDs between line 1 and line 2', () => {
+    const mismatchedLine2 = `2 99999${ISS_LINE2.slice(7)}`
+    const result = parseTleBlock(`${ISS_LINE1}\n${mismatchedLine2}`)
+    expect(result).toEqual({ ok: false, error: "NORAD IDs on line 1 and line 2 don't match." })
+  })
+
+  it('rejects a non-numeric NORAD ID', () => {
+    const badLine1 = `1 ABCDEU${ISS_LINE1.slice(8)}`
+    const badLine2 = `2 ABCDE${ISS_LINE2.slice(7)}`
+    const result = parseTleBlock(`${badLine1}\n${badLine2}`)
+    expect(result).toEqual({ ok: false, error: 'NORAD ID (line 1, columns 3-7) must be numeric.' })
+  })
+
+  it('rejects a line that fails its checksum', () => {
+    const corruptedLine1 = `${ISS_LINE1.slice(0, -1)}${ISS_LINE1.at(-1) === '0' ? '1' : '0'}`
+    const result = parseTleBlock(`${corruptedLine1}\n${ISS_LINE2}`)
+    expect(result).toEqual({ ok: false, error: 'Line 1 fails its checksum - check for typos.' })
   })
 })
 
