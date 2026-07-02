@@ -2,11 +2,13 @@ import * as satellite from 'satellite.js'
 import type { GeodeticCoordinates, StateVector, Vector3 } from '../engine'
 import type { TleRecord } from './types'
 
-function toSatRec(tle: TleRecord) {
+/** Parses a TLE into satellite.js's internal record. Exported for reuse by passPrediction.ts. */
+export function toSatRec(tle: TleRecord) {
   return satellite.twoline2satrec(tle.line1, tle.line2)
 }
 
-function propagateAt(satrec: ReturnType<typeof toSatRec>, date: Date) {
+/** Propagates a parsed satrec to an absolute date, throwing on SGP4 failure (e.g. decayed orbit). */
+export function propagateAt(satrec: ReturnType<typeof toSatRec>, date: Date) {
   const result = satellite.propagate(satrec, date)
   if (!result?.position || !result.velocity) {
     throw new Error(

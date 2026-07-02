@@ -11,6 +11,7 @@ import { OrbitScene } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { ElementPanel } from './ElementPanel'
 import { formatElapsed } from './formatElapsed'
+import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView } from './GroundTrackView'
 import { ModeToggle, type ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
@@ -231,6 +232,7 @@ export function OrbitViewer() {
         currentAltitudeRef={currentAltitudeRef}
         currentSpeedRef={currentSpeedRef}
       />
+      {isTrackingReal && <GroundStationPanel tle={selectedTle} />}
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
         <div className="flex gap-2">
           <ModeToggle
