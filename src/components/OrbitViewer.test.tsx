@@ -174,7 +174,10 @@ describe('OrbitViewer', () => {
     await screen.findByText('ISS (ZARYA)')
 
     expect(screen.queryByLabelText('a value')).not.toBeInTheDocument()
-    expect(setRealSatelliteMock).toHaveBeenCalledWith(ISS_TLE)
+    // setRealSatellite fires from an effect keyed off the same setSelectedTle
+    // update that findByText just resolved on - it can lag a tick behind in
+    // slower CI environments, so poll rather than asserting synchronously.
+    await waitFor(() => expect(setRealSatelliteMock).toHaveBeenCalledWith(ISS_TLE))
   })
 
   it('pushes a search result selection through to scene.setRealSatellite', async () => {
@@ -191,7 +194,7 @@ describe('OrbitViewer', () => {
     const resultButton = await screen.findByRole('button', { name: /ISS \(NAUKA\)/ })
     fireEvent.click(resultButton)
 
-    expect(setRealSatelliteMock).toHaveBeenCalledWith(NAUKA_TLE)
+    await waitFor(() => expect(setRealSatelliteMock).toHaveBeenCalledWith(NAUKA_TLE))
   })
 })
 
