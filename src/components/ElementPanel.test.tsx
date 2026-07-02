@@ -14,7 +14,7 @@ const baseElements: OrbitalElements = {
 
 describe('ElementPanel', () => {
   it('displays angular elements in degrees', () => {
-    render(<ElementPanel elements={baseElements} onChange={vi.fn()} />)
+    render(<ElementPanel elements={baseElements} onChange={vi.fn()} onSelectPreset={vi.fn()} />)
     expect(screen.getByLabelText('i value')).toHaveValue(51.6)
     expect(screen.getByLabelText('Ω value')).toHaveValue(45)
     expect(screen.getByLabelText('ω value')).toHaveValue(30)
@@ -22,7 +22,7 @@ describe('ElementPanel', () => {
 
   it('converts a degree input change back to radians', () => {
     const onChange = vi.fn()
-    render(<ElementPanel elements={baseElements} onChange={onChange} />)
+    render(<ElementPanel elements={baseElements} onChange={onChange} onSelectPreset={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText('i value'), { target: { value: '98.6' } })
 
@@ -33,12 +33,12 @@ describe('ElementPanel', () => {
 
   it('warns when perigee altitude is negative', () => {
     const decayedElements: OrbitalElements = { ...baseElements, semiMajorAxisKm: 3000 }
-    render(<ElementPanel elements={decayedElements} onChange={vi.fn()} />)
+    render(<ElementPanel elements={decayedElements} onChange={vi.fn()} onSelectPreset={vi.fn()} />)
     expect(screen.getByText(/orbit intersects Earth/)).toBeInTheDocument()
   })
 
   it('does not warn for a healthy orbit', () => {
-    render(<ElementPanel elements={baseElements} onChange={vi.fn()} />)
+    render(<ElementPanel elements={baseElements} onChange={vi.fn()} onSelectPreset={vi.fn()} />)
     expect(screen.queryByText(/orbit intersects Earth/)).not.toBeInTheDocument()
   })
 })

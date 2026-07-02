@@ -1,6 +1,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { EARTH_RADIUS_KM, type GeodeticCoordinates, type OrbitalElements, magnitude } from '../engine'
+import {
+  EARTH_RADIUS_KM,
+  type GeodeticCoordinates,
+  type OrbitalElements,
+  type Vector3,
+  magnitude,
+} from '../engine'
 import type { TleRecord } from '../satellite'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
 import { eciToScene } from './coordinates'
@@ -21,6 +27,12 @@ export interface TickInfo {
   speedKmS: number
 }
 
+/** Camera position and orbit-controls look-at target, both in scene units. */
+export interface CameraState {
+  position: Vector3
+  target: Vector3
+}
+
 /** How often (wall-clock ms) the ground track is recomputed and reported. */
 const GROUND_TRACK_REPORT_INTERVAL_MS = 200
 /** How many trailing orbital periods the ground track window covers. */
@@ -30,6 +42,7 @@ const GROUND_TRACK_SAMPLE_COUNT = 200
 
 export interface OrbitSceneOptions {
   initialElements: OrbitalElements
+  initialCamera?: CameraState
   onTick?: (info: TickInfo) => void
   onGroundTrackUpdate?: (points: GeodeticCoordinates[]) => void
 }
@@ -72,7 +85,16 @@ export class OrbitScene {
     this.scene = new THREE.Scene()
 
     this.camera = new THREE.PerspectiveCamera(50, this.aspectRatio, 0.1, 1000)
-    this.camera.position.set(0, EARTH_RADIUS_SCENE_UNITS * 2, EARTH_RADIUS_SCENE_UNITS * 5)
+    const initialCameraPosition = options.initialCamera?.position
+    if (initialCameraPosition) {
+      this.camera.position.set(
+        initialCameraPosition.x,
+        initialCameraPosition.y,
+        initialCameraPosition.z,
+      )
+    } else {
+      this.camera.position.set(0, EARTH_RADIUS_SCENE_UNITS * 2, EARTH_RADIUS_SCENE_UNITS * 5)
+    }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(window.devicePixelRatio)
@@ -84,6 +106,11 @@ export class OrbitScene {
     this.controls.enablePan = false
     this.controls.minDistance = EARTH_RADIUS_SCENE_UNITS * 1.2
     this.controls.maxDistance = EARTH_RADIUS_SCENE_UNITS * 15
+    const initialCameraTarget = options.initialCamera?.target
+    if (initialCameraTarget) {
+      this.controls.target.set(initialCameraTarget.x, initialCameraTarget.y, initialCameraTarget.z)
+      this.controls.update()
+    }
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.35))
     const sun = new THREE.DirectionalLight(0xffffff, 1.5)
@@ -174,6 +201,21 @@ export class OrbitScene {
 
   setSpeedMultiplier(speedMultiplier: number): void {
     this.speedMultiplier = speedMultiplier
+  }
+
+  /** Reads the current camera position and orbit-controls target, for sharing/URL state. */
+  getCameraState(): CameraState {
+    return {
+      position: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
+      target: { x: this.controls.target.x, y: this.controls.target.y, z: this.controls.target.z },
+    }
+  }
+
+  /** Restores a previously-captured camera position/target (e.g. from a shared URL). */
+  setCameraState(state: CameraState): void {
+    this.camera.position.set(state.position.x, state.position.y, state.position.z)
+    this.controls.target.set(state.target.x, state.target.y, state.target.z)
+    this.controls.update()
   }
 
   /** Seeks to a given elapsed sim time (seconds since epoch) and repositions the satellite. */

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TleRecord } from '../satellite'
 import type { OrbitSceneOptions } from '../three/OrbitScene'
@@ -11,6 +11,8 @@ const playMock = vi.fn()
 const pauseMock = vi.fn()
 const setSpeedMultiplierMock = vi.fn()
 const seekMock = vi.fn()
+const getCameraStateMock = vi.fn()
+const setCameraStateMock = vi.fn()
 
 let capturedOptions: OrbitSceneOptions | null = null
 
@@ -30,6 +32,8 @@ vi.mock('../three/OrbitScene', () => ({
       pause: pauseMock,
       setSpeedMultiplier: setSpeedMultiplierMock,
       seek: seekMock,
+      getCameraState: getCameraStateMock,
+      setCameraState: setCameraStateMock,
     })
   }),
 }))
@@ -64,6 +68,15 @@ beforeEach(() => {
   capturedOptions = null
   fetchByNoradIdMock.mockResolvedValue(ISS_TLE)
   searchByNameMock.mockResolvedValue([])
+  getCameraStateMock.mockReturnValue({
+    position: { x: 0, y: 4, z: 10 },
+    target: { x: 0, y: 0, z: 0 },
+  })
+  window.history.replaceState(null, '', '/')
+  vi.stubGlobal('navigator', {
+    ...navigator,
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+  })
 })
 
 describe('OrbitViewer', () => {
@@ -179,5 +192,102 @@ describe('OrbitViewer', () => {
     fireEvent.click(resultButton)
 
     expect(setRealSatelliteMock).toHaveBeenCalledWith(NAUKA_TLE)
+  })
+})
+
+describe('OrbitViewer URL scenario sync', () => {
+  it('decodes an initial design scenario from the URL', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?mode=design&a=7000&e=0.01&i=45&raan=10&argp=20&nu=30&speed=300',
+    )
+    render(<OrbitViewer />)
+
+    expect(screen.getByLabelText('a value')).toHaveValue(7000)
+    expect(screen.getByLabelText('e value')).toHaveValue(0.01)
+    expect(screen.getByLabelText('Speed multiplier')).toHaveValue('300')
+  })
+
+  it('decodes an initial track-real scenario from the URL, fetching the right satellite', async () => {
+    fetchByNoradIdMock.mockResolvedValue(NAUKA_TLE)
+    window.history.replaceState(null, '', '/?mode=track-real&norad=49044&speed=60')
+
+    render(<OrbitViewer />)
+
+    expect(fetchByNoradIdMock).toHaveBeenCalledWith('49044')
+    await screen.findByText('ISS (NAUKA)')
+  })
+
+  it('replaces (does not push) the URL when a slider changes', () => {
+    render(<OrbitViewer />)
+    const historyLengthBefore = window.history.length
+
+    fireEvent.change(screen.getByLabelText('a value'), { target: { value: '7500' } })
+
+    expect(window.history.length).toBe(historyLengthBefore)
+    expect(window.location.search).toContain('a=7500')
+  })
+
+  it('pushes a new history entry when a preset is selected', () => {
+    render(<OrbitViewer />)
+    const historyLengthBefore = window.history.length
+
+    fireEvent.click(screen.getByRole('button', { name: 'GEO' }))
+
+    expect(window.history.length).toBe(historyLengthBefore + 1)
+    expect(window.location.search).toContain('a=42164.137')
+  })
+
+  it('pushes a new history entry when the mode toggle is switched', async () => {
+    render(<OrbitViewer />)
+    const historyLengthBefore = window.history.length
+
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+
+    expect(window.history.length).toBe(historyLengthBefore + 1)
+    expect(window.location.search).toContain('mode=track-real')
+    expect(window.location.search).toContain('norad=25544')
+  })
+
+  it('copies the current scenario as a URL to the clipboard', async () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1))
+    const copiedUrl = vi.mocked(navigator.clipboard.writeText).mock.calls[0][0]
+    expect(copiedUrl).toContain('mode=design')
+    expect(copiedUrl).toMatch(/^http/)
+  })
+
+  it('restores a previous design scenario when a popstate event fires (back button)', () => {
+    render(<OrbitViewer />)
+
+    // Simulate the browser having navigated back to an earlier GEO scenario.
+    window.history.pushState(
+      null,
+      '',
+      '/?mode=design&a=42164.137&e=0&i=0&raan=0&argp=0&nu=0&speed=60',
+    )
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    expect(screen.getByLabelText('a value')).toHaveValue(42164.137)
+  })
+
+  it('restores a previous track-real scenario when a popstate event fires', async () => {
+    render(<OrbitViewer />)
+    fetchByNoradIdMock.mockResolvedValue(NAUKA_TLE)
+
+    window.history.pushState(null, '', '/?mode=track-real&norad=49044&speed=60')
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    expect(fetchByNoradIdMock).toHaveBeenCalledWith('49044')
+    await screen.findByText('ISS (NAUKA)')
   })
 })

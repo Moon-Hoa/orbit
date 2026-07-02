@@ -25,6 +25,10 @@ Every push to `main` runs the [deploy workflow](.github/workflows/deploy.yml), w
 
 "Track a real satellite" mode fetches TLEs directly from [Celestrak](https://celestrak.org/) client-side (it sends permissive CORS headers), cached in `localStorage` for ~2 hours to avoid re-fetching on every reload. There's no backend - this app is 100% static, deployed to GitHub Pages. If this ever moves behind a real edge function/cache (e.g. on a future AWS/GCP deploy), it's a drop-in swap: `src/satellite/celestrakProvider.ts` is the only place that knows about Celestrak's URL shape.
 
+## Sharing scenarios
+
+The whole scenario (design elements or tracked satellite, playback speed, camera position) lives in the URL's query params - there's no save/share backend. Continuous edits (slider drags) use `history.replaceState`; discrete actions (preset select, mode switch, satellite pick) use `history.pushState`, so the browser back button steps back through them like an undo stack. See `src/scenario/` for the encode/decode logic and the preset library (ISS, GEO, Molniya, Sun-synchronous, GPS).
+
 ## Credits
 
 Earth daymap texture (`src/assets/earth-daymap.jpg`) by [Solar System Scope](https://www.solarsystemscope.com/textures/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
