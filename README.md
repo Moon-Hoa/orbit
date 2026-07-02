@@ -20,3 +20,7 @@ npm run dev
 ## Deployment
 
 Every push to `main` runs the [deploy workflow](.github/workflows/deploy.yml), which builds the app and publishes it to GitHub Pages. Enable Pages once under the repo's **Settings → Pages** by setting the source to **GitHub Actions**.
+
+## Credits
+
+Earth daymap texture (`src/assets/earth-daymap.jpg`) by [Solar System Scope](https://www.solarsystemscope.com/textures/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

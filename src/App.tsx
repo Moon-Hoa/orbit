@@ -1,11 +1,7 @@
+import { OrbitViewer } from './components/OrbitViewer'
+
 function App() {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-        Orbit
-      </h1>
-    </div>
-  )
+  return <OrbitViewer />
 }
 
 export default App
