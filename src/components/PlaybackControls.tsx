@@ -55,7 +55,11 @@ export function PlaybackControls({
             </option>
           ))}
         </select>
-        <span ref={timeReadoutRef} className="ml-auto font-mono text-xs text-slate-300">
+        <span
+          ref={timeReadoutRef}
+          data-testid="time-readout"
+          className="ml-auto font-mono text-xs text-slate-300"
+        >
           T+00:00:00
         </span>
       </div>

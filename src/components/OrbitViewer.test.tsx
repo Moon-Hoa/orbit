@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { OrbitSceneOptions } from '../three/OrbitScene'
 
 const startMock = vi.fn()
 const disposeMock = vi.fn()
@@ -9,8 +10,15 @@ const pauseMock = vi.fn()
 const setSpeedMultiplierMock = vi.fn()
 const seekMock = vi.fn()
 
+let capturedOptions: OrbitSceneOptions | null = null
+
 vi.mock('../three/OrbitScene', () => ({
-  OrbitScene: vi.fn().mockImplementation(function MockOrbitScene(this: object) {
+  OrbitScene: vi.fn().mockImplementation(function MockOrbitScene(
+    this: object,
+    _container: HTMLElement,
+    options: OrbitSceneOptions,
+  ) {
+    capturedOptions = options
     return Object.assign(this, {
       start: startMock,
       dispose: disposeMock,
@@ -27,6 +35,7 @@ const { OrbitViewer } = await import('./OrbitViewer')
 
 beforeEach(() => {
   vi.clearAllMocks()
+  capturedOptions = null
 })
 
 describe('OrbitViewer', () => {
@@ -95,5 +104,30 @@ describe('OrbitViewer', () => {
     expect(screen.queryByText(/Coming in Phase 5/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
     expect(screen.getByText(/Coming in Phase 5/)).toBeInTheDocument()
+  })
+
+  it('updates the time/altitude/speed readouts via refs when the scene ticks', () => {
+    render(<OrbitViewer />)
+
+    capturedOptions?.onTick?.({ simTimeSeconds: 125, altitudeKm: 410.456, speedKmS: 7.6612 })
+
+    expect(screen.getByTestId('time-readout')).toHaveTextContent('T+00:02:05')
+    expect(screen.getByTestId('current-altitude')).toHaveTextContent('410.5 km')
+    expect(screen.getByTestId('current-speed')).toHaveTextContent('7.66 km/s')
+  })
+
+  it('renders the ground track when the scene reports an update', () => {
+    render(<OrbitViewer />)
+
+    act(() => {
+      capturedOptions?.onGroundTrackUpdate?.([
+        { latitudeRad: 0, longitudeRad: 0, altitudeKm: 408 },
+        { latitudeRad: 0.1, longitudeRad: 0.1, altitudeKm: 408 },
+      ])
+    })
+
+    const groundTrack = screen.getByRole('img', { name: 'Ground track' })
+    expect(groundTrack.querySelectorAll('polyline')).toHaveLength(1)
+    expect(groundTrack.querySelectorAll('circle')).toHaveLength(1)
   })
 })

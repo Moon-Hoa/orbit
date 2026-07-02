@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { orbitalPeriodSeconds } from '../engine'
+import { type GeodeticCoordinates, orbitalPeriodSeconds } from '../engine'
 import { OrbitScene } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { ElementPanel } from './ElementPanel'
 import { formatElapsed } from './formatElapsed'
+import { GroundTrackView } from './GroundTrackView'
 import { ModeToggle, type ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
+import { StatsPanel } from './StatsPanel'
 
 /**
  * Thin React boundary around the Three.js scene: owns UI state (elements,
@@ -17,11 +19,14 @@ export function OrbitViewer() {
   const sceneRef = useRef<OrbitScene | null>(null)
   const scrubRef = useRef<HTMLInputElement>(null)
   const timeReadoutRef = useRef<HTMLSpanElement>(null)
+  const currentAltitudeRef = useRef<HTMLSpanElement>(null)
+  const currentSpeedRef = useRef<HTMLSpanElement>(null)
 
   const [elements, setElements] = useState(ISS_LIKE_ELEMENTS)
   const [isPlaying, setIsPlaying] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(60)
   const [mode, setMode] = useState<ViewerMode>('design')
+  const [groundTrackPoints, setGroundTrackPoints] = useState<GeodeticCoordinates[]>([])
 
   const periodSeconds = useMemo(
     () => orbitalPeriodSeconds(elements.semiMajorAxisKm),
@@ -36,12 +41,19 @@ export function OrbitViewer() {
 
     const scene = new OrbitScene(container, {
       initialElements: elements,
-      onTick: (simTimeSeconds) => {
+      onTick: ({ simTimeSeconds, altitudeKm, speedKmS }) => {
         if (scrubRef.current) scrubRef.current.value = String(simTimeSeconds)
         if (timeReadoutRef.current) {
           timeReadoutRef.current.textContent = formatElapsed(simTimeSeconds)
         }
+        if (currentAltitudeRef.current) {
+          currentAltitudeRef.current.textContent = `${altitudeKm.toFixed(1)} km`
+        }
+        if (currentSpeedRef.current) {
+          currentSpeedRef.current.textContent = `${speedKmS.toFixed(2)} km/s`
+        }
       },
+      onGroundTrackUpdate: setGroundTrackPoints,
     })
     sceneRef.current = scene
     scene.start()
@@ -71,7 +83,15 @@ export function OrbitViewer() {
       <div ref={containerRef} className="absolute inset-0" />
 
       <ElementPanel elements={elements} onChange={setElements} />
-      <ModeToggle mode={mode} onChange={setMode} />
+      <StatsPanel
+        elements={elements}
+        currentAltitudeRef={currentAltitudeRef}
+        currentSpeedRef={currentSpeedRef}
+      />
+      <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
+        <ModeToggle mode={mode} onChange={setMode} />
+        <GroundTrackView points={groundTrackPoints} />
+      </div>
       <PlaybackControls
         isPlaying={isPlaying}
         onTogglePlay={() => setIsPlaying((playing) => !playing)}

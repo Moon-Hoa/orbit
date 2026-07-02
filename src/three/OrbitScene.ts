@@ -1,6 +1,14 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { type OrbitalElements, orbitalPeriodSeconds, propagateToStateVector } from '../engine'
+import {
+  EARTH_RADIUS_KM,
+  type GeodeticCoordinates,
+  type OrbitalElements,
+  magnitude,
+  orbitalPeriodSeconds,
+  propagateToStateVector,
+  sampleGroundTrack,
+} from '../engine'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
 import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
@@ -8,10 +16,26 @@ import { createOrbitPath } from './createOrbitPath'
 import { createSatelliteMarker } from './createSatelliteMarker'
 import { disposeObject3D } from './disposeObject3D'
 
+export interface TickInfo {
+  /** Elapsed sim time, wrapped to [0, orbital period). */
+  simTimeSeconds: number
+  /** Current altitude above Earth's surface, km. */
+  altitudeKm: number
+  /** Current orbital speed, km/s. */
+  speedKmS: number
+}
+
+/** How often (wall-clock ms) the ground track is recomputed and reported. */
+const GROUND_TRACK_REPORT_INTERVAL_MS = 200
+/** How many trailing orbital periods the ground track window covers. */
+const GROUND_TRACK_WINDOW_PERIODS = 1.5
+/** How many points are sampled across the ground track window. */
+const GROUND_TRACK_SAMPLE_COUNT = 200
+
 export interface OrbitSceneOptions {
   initialElements: OrbitalElements
-  /** Called every animation frame with elapsed sim time, wrapped to [0, orbital period). */
-  onTick?: (simTimeSeconds: number) => void
+  onTick?: (info: TickInfo) => void
+  onGroundTrackUpdate?: (points: GeodeticCoordinates[]) => void
 }
 
 /**
@@ -28,7 +52,8 @@ export class OrbitScene {
   private readonly controls: OrbitControls
   private readonly resizeObserver: ResizeObserver
   private readonly satelliteMarker: THREE.Mesh
-  private readonly onTick?: (simTimeSeconds: number) => void
+  private readonly onTick?: (info: TickInfo) => void
+  private readonly onGroundTrackUpdate?: (points: GeodeticCoordinates[]) => void
 
   private orbitPath: THREE.Mesh
   private elements: OrbitalElements
@@ -37,11 +62,13 @@ export class OrbitScene {
   private speedMultiplier = 60
   private animationFrameId: number | null = null
   private lastFrameTime: number | null = null
+  private lastGroundTrackReportTime: number | null = null
 
   constructor(container: HTMLElement, options: OrbitSceneOptions) {
     this.container = container
     this.elements = options.initialElements
     this.onTick = options.onTick
+    this.onGroundTrackUpdate = options.onGroundTrackUpdate
     this.scene = new THREE.Scene()
 
     this.camera = new THREE.PerspectiveCamera(50, this.aspectRatio, 0.1, 1000)
@@ -70,7 +97,7 @@ export class OrbitScene {
 
     this.satelliteMarker = createSatelliteMarker()
     this.scene.add(this.satelliteMarker)
-    this.updateSatellitePosition()
+    this.syncToCurrentState(true)
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(container)
@@ -86,15 +113,32 @@ export class OrbitScene {
     this.renderer.setSize(this.container.clientWidth, this.container.clientHeight)
   }
 
-  private updateSatellitePosition(): void {
+  /** Recomputes the current state vector once and applies it everywhere it's needed. */
+  private syncToCurrentState(forceGroundTrack: boolean): void {
     const state = propagateToStateVector(this.elements, this.simTimeSeconds)
     this.satelliteMarker.position.copy(eciToScene(state.position))
-  }
 
-  private reportTick(): void {
     const period = orbitalPeriodSeconds(this.elements.semiMajorAxisKm)
-    const wrapped = ((this.simTimeSeconds % period) + period) % period
-    this.onTick?.(wrapped)
+    const wrappedSimTime = ((this.simTimeSeconds % period) + period) % period
+    this.onTick?.({
+      simTimeSeconds: wrappedSimTime,
+      altitudeKm: magnitude(state.position) - EARTH_RADIUS_KM,
+      speedKmS: magnitude(state.velocity),
+    })
+
+    const now = performance.now()
+    const dueForReport =
+      forceGroundTrack ||
+      this.lastGroundTrackReportTime === null ||
+      now - this.lastGroundTrackReportTime >= GROUND_TRACK_REPORT_INTERVAL_MS
+    if (dueForReport && this.onGroundTrackUpdate) {
+      this.lastGroundTrackReportTime = now
+      const windowSeconds = period * GROUND_TRACK_WINDOW_PERIODS
+      const sampleIntervalSeconds = windowSeconds / GROUND_TRACK_SAMPLE_COUNT
+      this.onGroundTrackUpdate(
+        sampleGroundTrack(this.elements, this.simTimeSeconds, windowSeconds, sampleIntervalSeconds),
+      )
+    }
   }
 
   /** Replaces the current orbital elements, rebuilding the path and repositioning the satellite. */
@@ -106,8 +150,7 @@ export class OrbitScene {
     this.orbitPath = createOrbitPath(elements)
     this.scene.add(this.orbitPath)
 
-    this.updateSatellitePosition()
-    this.reportTick()
+    this.syncToCurrentState(true)
   }
 
   play(): void {
@@ -125,8 +168,7 @@ export class OrbitScene {
   /** Seeks to a given elapsed sim time (seconds since epoch) and repositions the satellite. */
   seek(simTimeSeconds: number): void {
     this.simTimeSeconds = simTimeSeconds
-    this.updateSatellitePosition()
-    this.reportTick()
+    this.syncToCurrentState(true)
   }
 
   start(): void {
@@ -136,8 +178,7 @@ export class OrbitScene {
 
       if (this.isPlaying) {
         this.simTimeSeconds += deltaSeconds * this.speedMultiplier
-        this.updateSatellitePosition()
-        this.reportTick()
+        this.syncToCurrentState(false)
       }
 
       this.controls.update()

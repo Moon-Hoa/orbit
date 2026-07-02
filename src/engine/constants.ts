@@ -8,3 +8,6 @@ export const EARTH_RADIUS_KM = 6378.137
 export const SIDEREAL_DAY_S = 86164.0905
 
 export const TWO_PI = 2 * Math.PI
+
+/** Earth's rotation rate about its axis, rad/s. */
+export const EARTH_ROTATION_RATE_RAD_S = TWO_PI / SIDEREAL_DAY_S

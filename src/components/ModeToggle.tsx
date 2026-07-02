@@ -11,7 +11,7 @@ interface ModeToggleProps {
  */
 export function ModeToggle({ mode, onChange }: ModeToggleProps) {
   return (
-    <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-1">
       <div className="flex overflow-hidden rounded-lg bg-slate-900/80 backdrop-blur">
         <button
           type="button"
