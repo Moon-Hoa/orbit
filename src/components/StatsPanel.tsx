@@ -1,11 +1,6 @@
 import type { RefObject } from 'react'
 import { useMemo } from 'react'
-import {
-  type OrbitalElements,
-  apogeeAltitudeKm,
-  orbitalPeriodSeconds,
-  perigeeAltitudeKm,
-} from '../engine'
+import { apogeeAltitudeKm, orbitalPeriodSeconds, perigeeAltitudeKm } from '../engine'
 
 interface StatRowProps {
   label: string
@@ -29,25 +24,33 @@ function StatRow({ label, value, valueRef, testId }: StatRowProps) {
   )
 }
 
+/** The subset of orbital shape needed for period/apogee/perigee - works for either engine mode. */
+export interface OrbitShape {
+  semiMajorAxisKm: number
+  eccentricity: number
+}
+
 interface StatsPanelProps {
-  elements: OrbitalElements
+  orbitShape: OrbitShape
   currentAltitudeRef: RefObject<HTMLSpanElement | null>
   currentSpeedRef: RefObject<HTMLSpanElement | null>
 }
 
-/** Derived orbit stats: period/apogee/perigee (from elements) plus live altitude/speed (ref-driven). */
-export function StatsPanel({ elements, currentAltitudeRef, currentSpeedRef }: StatsPanelProps) {
+/** Derived orbit stats: period/apogee/perigee (from orbit shape) plus live altitude/speed (ref-driven). */
+export function StatsPanel({ orbitShape, currentAltitudeRef, currentSpeedRef }: StatsPanelProps) {
+  const { semiMajorAxisKm, eccentricity } = orbitShape
+
   const periodMinutes = useMemo(
-    () => orbitalPeriodSeconds(elements.semiMajorAxisKm) / 60,
-    [elements.semiMajorAxisKm],
+    () => orbitalPeriodSeconds(semiMajorAxisKm) / 60,
+    [semiMajorAxisKm],
   )
   const apogeeKm = useMemo(
-    () => apogeeAltitudeKm(elements.semiMajorAxisKm, elements.eccentricity),
-    [elements.semiMajorAxisKm, elements.eccentricity],
+    () => apogeeAltitudeKm(semiMajorAxisKm, eccentricity),
+    [semiMajorAxisKm, eccentricity],
   )
   const perigeeKm = useMemo(
-    () => perigeeAltitudeKm(elements.semiMajorAxisKm, elements.eccentricity),
-    [elements.semiMajorAxisKm, elements.eccentricity],
+    () => perigeeAltitudeKm(semiMajorAxisKm, eccentricity),
+    [semiMajorAxisKm, eccentricity],
   )
 
   return (

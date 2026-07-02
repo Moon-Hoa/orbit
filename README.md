@@ -21,6 +21,10 @@ npm run dev
 
 Every push to `main` runs the [deploy workflow](.github/workflows/deploy.yml), which builds the app and publishes it to GitHub Pages. Enable Pages once under the repo's **Settings → Pages** by setting the source to **GitHub Actions**.
 
+## Real satellite data
+
+"Track a real satellite" mode fetches TLEs directly from [Celestrak](https://celestrak.org/) client-side (it sends permissive CORS headers), cached in `localStorage` for ~2 hours to avoid re-fetching on every reload. There's no backend - this app is 100% static, deployed to GitHub Pages. If this ever moves behind a real edge function/cache (e.g. on a future AWS/GCP deploy), it's a drop-in swap: `src/satellite/celestrakProvider.ts` is the only place that knows about Celestrak's URL shape.
+
 ## Credits
 
 Earth daymap texture (`src/assets/earth-daymap.jpg`) by [Solar System Scope](https://www.solarsystemscope.com/textures/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

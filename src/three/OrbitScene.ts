@@ -1,20 +1,16 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import {
-  EARTH_RADIUS_KM,
-  type GeodeticCoordinates,
-  type OrbitalElements,
-  magnitude,
-  orbitalPeriodSeconds,
-  propagateToStateVector,
-  sampleGroundTrack,
-} from '../engine'
+import { EARTH_RADIUS_KM, type GeodeticCoordinates, type OrbitalElements, magnitude } from '../engine'
+import type { TleRecord } from '../satellite'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
 import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
 import { createOrbitPath } from './createOrbitPath'
 import { createSatelliteMarker } from './createSatelliteMarker'
+import { DesignOrbitSource } from './DesignOrbitSource'
 import { disposeObject3D } from './disposeObject3D'
+import type { OrbitSource } from './OrbitSource'
+import { RealSatelliteSource } from './RealSatelliteSource'
 
 export interface TickInfo {
   /** Elapsed sim time, wrapped to [0, orbital period). */
@@ -42,7 +38,11 @@ export interface OrbitSceneOptions {
  * Owns the Three.js scene, camera, renderer, controls, and render loop.
  * Deliberately kept free of React so the render loop stays under direct
  * control; the React side only mounts/unmounts an instance and calls its
- * imperative methods (setElements/play/pause/seek/...).
+ * imperative methods (setDesignElements/setRealSatellite/play/pause/seek/...).
+ *
+ * The satellite marker/ground track/orbit-path-line logic doesn't care
+ * whether it's driven by a designed two-body orbit or a real SGP4-propagated
+ * satellite - both are just an `OrbitSource` (see OrbitSource.ts).
  */
 export class OrbitScene {
   private readonly container: HTMLElement
@@ -56,7 +56,7 @@ export class OrbitScene {
   private readonly onGroundTrackUpdate?: (points: GeodeticCoordinates[]) => void
 
   private orbitPath: THREE.Mesh
-  private elements: OrbitalElements
+  private source: OrbitSource
   private simTimeSeconds = 0
   private isPlaying = false
   private speedMultiplier = 60
@@ -66,7 +66,7 @@ export class OrbitScene {
 
   constructor(container: HTMLElement, options: OrbitSceneOptions) {
     this.container = container
-    this.elements = options.initialElements
+    this.source = new DesignOrbitSource(options.initialElements)
     this.onTick = options.onTick
     this.onGroundTrackUpdate = options.onGroundTrackUpdate
     this.scene = new THREE.Scene()
@@ -92,7 +92,7 @@ export class OrbitScene {
 
     this.scene.add(createEarth())
 
-    this.orbitPath = createOrbitPath(this.elements)
+    this.orbitPath = createOrbitPath(this.source.getOrbitPathPoints())
     this.scene.add(this.orbitPath)
 
     this.satelliteMarker = createSatelliteMarker()
@@ -115,10 +115,10 @@ export class OrbitScene {
 
   /** Recomputes the current state vector once and applies it everywhere it's needed. */
   private syncToCurrentState(forceGroundTrack: boolean): void {
-    const state = propagateToStateVector(this.elements, this.simTimeSeconds)
+    const state = this.source.getStateAt(this.simTimeSeconds)
     this.satelliteMarker.position.copy(eciToScene(state.position))
 
-    const period = orbitalPeriodSeconds(this.elements.semiMajorAxisKm)
+    const period = this.source.getPeriodSeconds()
     const wrappedSimTime = ((this.simTimeSeconds % period) + period) % period
     this.onTick?.({
       simTimeSeconds: wrappedSimTime,
@@ -136,21 +136,32 @@ export class OrbitScene {
       const windowSeconds = period * GROUND_TRACK_WINDOW_PERIODS
       const sampleIntervalSeconds = windowSeconds / GROUND_TRACK_SAMPLE_COUNT
       this.onGroundTrackUpdate(
-        sampleGroundTrack(this.elements, this.simTimeSeconds, windowSeconds, sampleIntervalSeconds),
+        this.source.getGroundTrack(this.simTimeSeconds, windowSeconds, sampleIntervalSeconds),
       )
     }
   }
 
-  /** Replaces the current orbital elements, rebuilding the path and repositioning the satellite. */
-  setElements(elements: OrbitalElements): void {
-    this.elements = elements
+  /** Swaps the active orbit source, rebuilding the path and repositioning the satellite. */
+  private setSource(source: OrbitSource, resetTime: boolean): void {
+    this.source = source
+    if (resetTime) this.simTimeSeconds = 0
 
     this.scene.remove(this.orbitPath)
     disposeObject3D(this.orbitPath)
-    this.orbitPath = createOrbitPath(elements)
+    this.orbitPath = createOrbitPath(source.getOrbitPathPoints())
     this.scene.add(this.orbitPath)
 
     this.syncToCurrentState(true)
+  }
+
+  /** Switches to (or updates) a user-designed two-body orbit. Keeps the current sim time. */
+  setDesignElements(elements: OrbitalElements): void {
+    this.setSource(new DesignOrbitSource(elements), false)
+  }
+
+  /** Switches to tracking a real satellite via its TLE, starting the clock fresh at "now". */
+  setRealSatellite(tle: TleRecord): void {
+    this.setSource(new RealSatelliteSource(tle, new Date()), true)
   }
 
   play(): void {
