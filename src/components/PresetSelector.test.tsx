@@ -18,7 +18,7 @@ describe('PresetSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Molniya' }))
 
     const molniya = PRESETS.find((p) => p.id === 'molniya')
-    expect(onSelect).toHaveBeenCalledWith(molniya?.elements)
+    expect(onSelect).toHaveBeenCalledWith(molniya?.elements, 'Molniya')
   })
 
   it('does not render companion buttons when onAddCompanion is omitted', () => {

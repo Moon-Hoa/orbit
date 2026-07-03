@@ -7,7 +7,7 @@ import { PresetSelector } from './PresetSelector'
 interface ElementPanelProps {
   elements: OrbitalElements
   onChange: (elements: OrbitalElements) => void
-  onSelectPreset: (elements: OrbitalElements) => void
+  onSelectPreset: (elements: OrbitalElements, label: string) => void
   onAddCompanion?: (preset: Preset) => void
   enableJ2: boolean
   onEnableJ2Change: (enableJ2: boolean) => void

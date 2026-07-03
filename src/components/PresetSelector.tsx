@@ -2,7 +2,7 @@ import type { OrbitalElements } from '../engine'
 import { type Preset, PRESETS } from '../scenario'
 
 interface PresetSelectorProps {
-  onSelect: (elements: OrbitalElements) => void
+  onSelect: (elements: OrbitalElements, label: string) => void
   /** Adds the preset as an additional (non-primary) tracked object, if provided. */
   onAddCompanion?: (preset: Preset) => void
 }
@@ -15,7 +15,7 @@ export function PresetSelector({ onSelect, onAddCompanion }: PresetSelectorProps
         <div key={preset.id} className="flex overflow-hidden rounded">
           <button
             type="button"
-            onClick={() => onSelect(preset.elements)}
+            onClick={() => onSelect(preset.elements, preset.label)}
             className="bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
           >
             {preset.label}

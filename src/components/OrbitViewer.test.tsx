@@ -276,6 +276,43 @@ describe('OrbitViewer', () => {
     expect(screen.getByText('1234.5 km')).toBeInTheDocument()
   })
 
+  it('announces mode switches in the aria-live region', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Track real satellite mode')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Design orbit' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Design orbit mode')
+  })
+
+  it('announces the loaded preset in the aria-live region', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'GEO' }))
+    expect(screen.getByRole('status')).toHaveTextContent('GEO preset loaded')
+  })
+
+  it('announces the auto-selected ISS when entering track-real mode', async () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+
+    expect(screen.getByRole('status')).toHaveTextContent('Tracking ISS (ZARYA), NORAD 25544')
+  })
+
+  it('toggles the accessible data table via keyboard-operable button', () => {
+    render(<OrbitViewer />)
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show data table' }))
+    expect(screen.getByRole('table')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide data table' }))
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
   it('renders the ground track when the scene reports an update', () => {
     render(<OrbitViewer />)
 

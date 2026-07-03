@@ -19,6 +19,7 @@ import type { ClosestApproachResult } from '../three/closestApproach'
 import { OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
+import { AccessibleDataView } from './AccessibleDataView'
 import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
 import { ExportControls } from './ExportControls'
@@ -73,6 +74,9 @@ export function OrbitViewer() {
   const currentAltitudeRef = useRef<HTMLSpanElement>(null)
   const currentSpeedRef = useRef<HTMLSpanElement>(null)
   const currentEclipseStatusRef = useRef<HTMLSpanElement>(null)
+  const dataViewAltitudeRef = useRef<HTMLTableCellElement>(null)
+  const dataViewSpeedRef = useRef<HTMLTableCellElement>(null)
+  const dataViewEclipseStatusRef = useRef<HTMLTableCellElement>(null)
   const isApplyingHistoryRef = useRef(false)
   const pendingHistoryPushRef = useRef(false)
   const companionsRef = useRef<CompanionEntry[]>([])
@@ -96,6 +100,13 @@ export function OrbitViewer() {
   const [closestApproach, setClosestApproach] = useState<ClosestApproachResult | null>(null)
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(loadStoredUnitSystem)
   const [enableJ2, setEnableJ2] = useState(false)
+  const [isDataViewOpen, setIsDataViewOpen] = useState(false)
+  const [announcement, setAnnouncement] = useState('')
+
+  /** Posts a message to the visually-hidden aria-live region, for screen readers. */
+  function announce(message: string) {
+    setAnnouncement(message)
+  }
 
   useEffect(() => {
     companionsRef.current = companions
@@ -124,6 +135,9 @@ export function OrbitViewer() {
   const focusedCompanion = companions.find((companion) => companion.id === focusedId)
 
   const primaryLabel = isTrackingReal ? selectedTle.name : 'Design orbit'
+
+  const currentGeodetic =
+    groundTracks.find((track) => track.id === PRIMARY_OBJECT_ID)?.points.at(-1) ?? null
 
   const orbitShape = useMemo(() => {
     if (focusedCompanion) {
@@ -166,15 +180,19 @@ export function OrbitViewer() {
         if (timeReadoutRef.current) {
           timeReadoutRef.current.textContent = formatElapsed(simTimeSeconds)
         }
-        if (currentAltitudeRef.current) {
-          currentAltitudeRef.current.textContent = formatDistanceKm(altitudeKm, unitSystemRef.current)
-        }
-        if (currentSpeedRef.current) {
-          currentSpeedRef.current.textContent = formatSpeedKmS(speedKmS, unitSystemRef.current)
-        }
-        if (currentEclipseStatusRef.current) {
-          currentEclipseStatusRef.current.textContent =
-            shadowFraction === null ? '—' : shadowFraction > 0 ? 'In eclipse' : 'In sunlight'
+        const altitudeText = formatDistanceKm(altitudeKm, unitSystemRef.current)
+        if (currentAltitudeRef.current) currentAltitudeRef.current.textContent = altitudeText
+        if (dataViewAltitudeRef.current) dataViewAltitudeRef.current.textContent = altitudeText
+
+        const speedText = formatSpeedKmS(speedKmS, unitSystemRef.current)
+        if (currentSpeedRef.current) currentSpeedRef.current.textContent = speedText
+        if (dataViewSpeedRef.current) dataViewSpeedRef.current.textContent = speedText
+
+        const eclipseText =
+          shadowFraction === null ? '—' : shadowFraction > 0 ? 'In eclipse' : 'In sunlight'
+        if (currentEclipseStatusRef.current) currentEclipseStatusRef.current.textContent = eclipseText
+        if (dataViewEclipseStatusRef.current) {
+          dataViewEclipseStatusRef.current.textContent = eclipseText
         }
       },
       onGroundTrackUpdate: (tracks) => {
@@ -212,11 +230,15 @@ export function OrbitViewer() {
     if (mode === 'track-real' && !selectedTle) {
       const noradId = initialScenario?.mode === 'track-real' ? initialScenario.noradId : ISS_NORAD_ID
       fetchByNoradId(noradId)
-        .then(setSelectedTle)
+        .then((tle) => {
+          setSelectedTle(tle)
+          announce(`Tracking ${tle.name}, NORAD ${tle.noradId}`)
+        })
         .catch(() => {
           // Best-effort default; the user can still search manually.
         })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selectedTle, initialScenario])
 
   useEffect(() => {
@@ -320,14 +342,31 @@ export function OrbitViewer() {
   return (
     <div className="relative h-screen w-screen bg-black">
       <div ref={containerRef} className="absolute inset-0" />
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
+      </div>
+      <AccessibleDataView
+        isOpen={isDataViewOpen}
+        onToggle={() => setIsDataViewOpen((open) => !open)}
+        mode={mode}
+        primaryLabel={primaryLabel}
+        selectedTle={isTrackingReal ? selectedTle : null}
+        elements={elements}
+        currentGeodetic={currentGeodetic}
+        currentAltitudeRef={dataViewAltitudeRef}
+        currentSpeedRef={dataViewSpeedRef}
+        currentEclipseStatusRef={dataViewEclipseStatusRef}
+        showEclipseStatus={isTrackingReal && focusedId === PRIMARY_OBJECT_ID}
+      />
 
       {mode === 'design' ? (
         <ElementPanel
           elements={elements}
           onChange={setElements}
-          onSelectPreset={(presetElements) => {
+          onSelectPreset={(presetElements, label) => {
             markDiscreteChange()
             setElements(presetElements)
+            announce(`${label} preset loaded`)
           }}
           onAddCompanion={addDesignCompanion}
           enableJ2={enableJ2}
@@ -339,6 +378,7 @@ export function OrbitViewer() {
           onSelect={(tle) => {
             markDiscreteChange()
             setSelectedTle(tle)
+            announce(`Tracking ${tle.name}, NORAD ${tle.noradId}`)
           }}
           onAddCompanion={addRealSatelliteCompanion}
         />
@@ -368,6 +408,7 @@ export function OrbitViewer() {
             onChange={(nextMode) => {
               markDiscreteChange()
               setMode(nextMode)
+              announce(nextMode === 'design' ? 'Design orbit mode' : 'Track real satellite mode')
             }}
           />
           <ShareButton getShareUrl={getShareUrl} />
