@@ -15,12 +15,13 @@ export function sampleGroundTrack(
   windowSeconds: number,
   sampleIntervalSeconds: number,
   mu = EARTH_MU_KM3_S2,
+  enableJ2 = false,
 ): GeodeticCoordinates[] {
   const startTimeSeconds = centerTimeSeconds - windowSeconds
   const points: GeodeticCoordinates[] = []
 
   for (let t = startTimeSeconds; t <= centerTimeSeconds; t += sampleIntervalSeconds) {
-    const state = propagateToStateVector(elements, t, mu)
+    const state = propagateToStateVector(elements, t, mu, enableJ2)
     points.push(eciToGeodetic(state.position, t))
   }
 

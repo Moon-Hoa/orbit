@@ -90,6 +90,7 @@ export function OrbitViewer() {
   const [groundTracks, setGroundTracks] = useState<GroundTrack[]>([])
   const [subsolarPoint, setSubsolarPoint] = useState<GeodeticCoordinates | null>(null)
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(loadStoredUnitSystem)
+  const [enableJ2, setEnableJ2] = useState(false)
 
   useEffect(() => {
     companionsRef.current = companions
@@ -213,8 +214,8 @@ export function OrbitViewer() {
   }, [mode, selectedTle, initialScenario])
 
   useEffect(() => {
-    if (mode === 'design') sceneRef.current?.setDesignElements(elements)
-  }, [elements, mode])
+    if (mode === 'design') sceneRef.current?.setDesignElements(elements, enableJ2)
+  }, [elements, mode, enableJ2])
 
   useEffect(() => {
     if (mode === 'track-real' && selectedTle) sceneRef.current?.setRealSatellite(selectedTle)
@@ -323,6 +324,8 @@ export function OrbitViewer() {
             setElements(presetElements)
           }}
           onAddCompanion={addDesignCompanion}
+          enableJ2={enableJ2}
+          onEnableJ2Change={setEnableJ2}
         />
       ) : (
         <SatelliteSearch

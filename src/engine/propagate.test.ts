@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EARTH_RADIUS_KM, SIDEREAL_DAY_S, TWO_PI } from './constants'
 import { elementsToStateVector } from './elements'
+import { argOfPerigeeDriftRadPerSec, raanDriftRadPerSec } from './j2'
 import { propagateElements, propagateToStateVector } from './propagate'
 import { apogeeRadiusKm, orbitalPeriodSeconds, perigeeRadiusKm } from './derived'
 import type { OrbitalElements } from './types'
@@ -76,5 +77,32 @@ describe('propagateElements', () => {
     expect(propagated.position.x).toBeCloseTo(direct.position.x, 9)
     expect(propagated.position.y).toBeCloseTo(direct.position.y, 9)
     expect(propagated.position.z).toBeCloseTo(direct.position.z, 9)
+  })
+
+  it('leaves RAAN/argument of perigee unchanged when enableJ2 is left off (default)', () => {
+    const propagated = propagateElements(issLike, 10_000)
+    expect(propagated.raanRad).toBe(issLike.raanRad)
+    expect(propagated.argOfPerigeeRad).toBe(issLike.argOfPerigeeRad)
+  })
+
+  it('advances RAAN/argument of perigee at the J2 secular drift rate when enableJ2 is on', () => {
+    const deltaTimeSeconds = 10_000
+    const propagated = propagateElements(issLike, deltaTimeSeconds, undefined, true)
+
+    const expectedRaan =
+      issLike.raanRad +
+      raanDriftRadPerSec(issLike.semiMajorAxisKm, issLike.eccentricity, issLike.inclinationRad) *
+        deltaTimeSeconds
+    const expectedArgOfPerigee =
+      issLike.argOfPerigeeRad +
+      argOfPerigeeDriftRadPerSec(
+        issLike.semiMajorAxisKm,
+        issLike.eccentricity,
+        issLike.inclinationRad,
+      ) *
+        deltaTimeSeconds
+
+    expect(angularDifference(propagated.raanRad, expectedRaan)).toBeCloseTo(0, 9)
+    expect(angularDifference(propagated.argOfPerigeeRad, expectedArgOfPerigee)).toBeCloseTo(0, 9)
   })
 })

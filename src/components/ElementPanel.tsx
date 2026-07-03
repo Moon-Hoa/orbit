@@ -9,10 +9,19 @@ interface ElementPanelProps {
   onChange: (elements: OrbitalElements) => void
   onSelectPreset: (elements: OrbitalElements) => void
   onAddCompanion?: (preset: Preset) => void
+  enableJ2: boolean
+  onEnableJ2Change: (enableJ2: boolean) => void
 }
 
 /** Sliders + numeric inputs for the six classical orbital elements, live-synced to engine state. */
-export function ElementPanel({ elements, onChange, onSelectPreset, onAddCompanion }: ElementPanelProps) {
+export function ElementPanel({
+  elements,
+  onChange,
+  onSelectPreset,
+  onAddCompanion,
+  enableJ2,
+  onEnableJ2Change,
+}: ElementPanelProps) {
   const perigeeAltitudeKm =
     elements.semiMajorAxisKm * (1 - elements.eccentricity) - EARTH_RADIUS_KM
 
@@ -81,6 +90,15 @@ export function ElementPanel({ elements, onChange, onSelectPreset, onAddCompanio
           Warning: perigee altitude is {perigeeAltitudeKm.toFixed(0)} km — orbit intersects Earth.
         </p>
       )}
+
+      <label className="mt-1 flex items-center gap-2 border-t border-slate-700 pt-2 text-xs text-slate-300">
+        <input
+          type="checkbox"
+          checked={enableJ2}
+          onChange={(event) => onEnableJ2Change(event.target.checked)}
+        />
+        Enable J2 perturbation (RAAN/argp drift)
+      </label>
     </div>
   )
 }

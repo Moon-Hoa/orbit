@@ -16,16 +16,23 @@ import type { OrbitSource } from './OrbitSource'
 /** Points sampled uniformly in true anomaly around one full orbit. */
 const PATH_SEGMENTS = 256
 
-/** An orbit driven by user-editable classical elements, via the Phase 1 two-body engine. */
+/**
+ * An orbit driven by user-editable classical elements, via the Phase 1
+ * two-body engine. `enableJ2` optionally layers in the J2 secular
+ * RAAN/argument-of-perigee drift (see `engine/j2.ts`) - off by default, which
+ * keeps output identical to plain two-body propagation.
+ */
 export class DesignOrbitSource implements OrbitSource {
   private readonly elements: OrbitalElements
+  private readonly enableJ2: boolean
 
-  constructor(elements: OrbitalElements) {
+  constructor(elements: OrbitalElements, enableJ2 = false) {
     this.elements = elements
+    this.enableJ2 = enableJ2
   }
 
   getStateAt(simTimeSeconds: number): StateVector {
-    return propagateToStateVector(this.elements, simTimeSeconds)
+    return propagateToStateVector(this.elements, simTimeSeconds, undefined, this.enableJ2)
   }
 
   getGeodeticAt(simTimeSeconds: number): GeodeticCoordinates {
@@ -42,6 +49,8 @@ export class DesignOrbitSource implements OrbitSource {
       centerSimTimeSeconds,
       windowSeconds,
       sampleIntervalSeconds,
+      undefined,
+      this.enableJ2,
     )
   }
 

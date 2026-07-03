@@ -67,9 +67,10 @@ export const PRESETS: Preset[] = [
     label: 'Sun-synchronous',
     elements: {
       // Landsat-8-like: ~705 km altitude, ~98.2 degree retrograde inclination.
-      // This engine is two-body only (no J2), so the real sun-synchronous
-      // nodal precession isn't modeled - these are realistic reference
-      // elements, not a claim that this simulation precesses correctly.
+      // With the J2 toggle (ElementPanel) enabled, this inclination/altitude
+      // combination gives a RAAN drift matching Earth's mean heliocentric
+      // rate (~0.9856 deg/day) - the literal definition of "sun-synchronous".
+      // With J2 off, it's two-body only and the nodal precession isn't modeled.
       semiMajorAxisKm: EARTH_RADIUS_KM + 705,
       eccentricity: 0.0001,
       inclinationRad: degToRad(98.2),

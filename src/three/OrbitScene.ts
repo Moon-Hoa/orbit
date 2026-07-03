@@ -57,6 +57,8 @@ const GROUND_TRACK_SAMPLE_COUNT = 200
 
 export interface OrbitSceneOptions {
   initialElements: OrbitalElements
+  /** Whether the initial design orbit starts with J2 secular drift enabled. Defaults to false. */
+  initialEnableJ2?: boolean
   initialCamera?: CameraState
   onTick?: (info: TickInfo) => void
   onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
@@ -151,7 +153,7 @@ export class OrbitScene {
     this.objects.set(
       PRIMARY_OBJECT_ID,
       this.createTrackedObject(
-        new DesignOrbitSource(options.initialElements),
+        new DesignOrbitSource(options.initialElements, options.initialEnableJ2 ?? false),
         DEFAULT_ORBIT_PATH_COLOR,
         DEFAULT_MARKER_COLOR,
       ),
@@ -204,8 +206,8 @@ export class OrbitScene {
   }
 
   /** Switches to (or updates) the primary user-designed two-body orbit. Keeps the current sim time. */
-  setDesignElements(elements: OrbitalElements): void {
-    this.replacePrimary(new DesignOrbitSource(elements), false)
+  setDesignElements(elements: OrbitalElements, enableJ2 = false): void {
+    this.replacePrimary(new DesignOrbitSource(elements, enableJ2), false)
   }
 
   /** Switches the primary object to tracking a real satellite via its TLE, starting the clock fresh at "now". */

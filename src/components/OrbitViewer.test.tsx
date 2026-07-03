@@ -110,7 +110,17 @@ describe('OrbitViewer', () => {
 
     expect(setDesignElementsMock).toHaveBeenCalledWith(
       expect.objectContaining({ semiMajorAxisKm: 7000 }),
+      false,
     )
+  })
+
+  it('pushes the J2 toggle through to scene.setDesignElements', () => {
+    render(<OrbitViewer />)
+    setDesignElementsMock.mockClear()
+
+    fireEvent.click(screen.getByLabelText(/Enable J2 perturbation/))
+
+    expect(setDesignElementsMock).toHaveBeenLastCalledWith(expect.any(Object), true)
   })
 
   it('toggles play/pause', () => {
