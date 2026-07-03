@@ -19,6 +19,7 @@ import { OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { ElementPanel } from './ElementPanel'
+import { ExportControls } from './ExportControls'
 import { formatElapsed } from './formatElapsed'
 import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView, type GroundTrack } from './GroundTrackView'
@@ -366,6 +367,13 @@ export function OrbitViewer() {
           <SettingsPanel unitSystem={unitSystem} onUnitSystemChange={setUnitSystem} />
         </div>
         <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />
+        <ExportControls
+          label={primaryLabel}
+          isTrackingReal={isTrackingReal}
+          elements={elements}
+          enableJ2={enableJ2}
+          tle={selectedTle}
+        />
       </div>
       <PlaybackControls
         isPlaying={isPlaying}
