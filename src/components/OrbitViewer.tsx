@@ -22,6 +22,7 @@ import { ElementPanel } from './ElementPanel'
 import { formatElapsed } from './formatElapsed'
 import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView, type GroundTrack } from './GroundTrackView'
+import { HohmannPlanner } from './HohmannPlanner'
 import { ModeToggle, type ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
 import { SatelliteSearch } from './SatelliteSearch'
@@ -351,6 +352,7 @@ export function OrbitViewer() {
         onRemoveCompanion={removeCompanion}
       />
       {isTrackingReal && <GroundStationPanel tle={selectedTle} />}
+      {mode === 'design' && <HohmannPlanner />}
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
         <div className="flex gap-2">
           <ModeToggle
