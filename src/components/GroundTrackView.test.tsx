@@ -71,3 +71,54 @@ describe('GroundTrackView', () => {
     expect(container.querySelectorAll('circle')).toHaveLength(0)
   })
 })
+
+describe('GroundTrackView terminator overlay', () => {
+  it('renders no night-shading polygon when no subsolar point is given', () => {
+    const { container } = render(<GroundTrackView tracks={[]} />)
+    expect(container.querySelector('polygon')).toBeNull()
+  })
+
+  it('renders no night-shading polygon when the subsolar point is explicitly null', () => {
+    const { container } = render(<GroundTrackView tracks={[]} subsolarPoint={null} />)
+    expect(container.querySelector('polygon')).toBeNull()
+  })
+
+  it('draws a night-shading polygon and a terminator line when given a subsolar point', () => {
+    const { container } = render(
+      <GroundTrackView tracks={[]} subsolarPoint={point(10, 20)} />,
+    )
+    expect(container.querySelector('polygon')).not.toBeNull()
+    // Terminator + tracks are both polylines; with no tracks, only the terminator line should exist.
+    expect(container.querySelectorAll('polyline')).toHaveLength(1)
+  })
+
+  it('places the subsolar marker at the given lat/lon', () => {
+    const { container } = render(
+      <GroundTrackView tracks={[]} subsolarPoint={point(0, 90)} />,
+    )
+    // lon=90deg -> x = (90+180)/360 * 720 = 540; lat=0 -> y = 180
+    const sunMarker = container.querySelector('circle[fill="#fde047"]')
+    expect(sunMarker).not.toBeNull()
+    expect(sunMarker?.getAttribute('cx')).toBe('540')
+    expect(sunMarker?.getAttribute('cy')).toBe('180')
+  })
+
+  it('shades the southern hemisphere (against the bottom edge) when the subsolar point is north of the equator', () => {
+    const { container } = render(
+      <GroundTrackView tracks={[]} subsolarPoint={point(23, 0)} />,
+    )
+    const polygon = container.querySelector('polygon')
+    const points = polygon?.getAttribute('points') ?? ''
+    // The polygon's closing corners should sit on the bottom edge (y=HEIGHT=360).
+    expect(points.trim().endsWith('720,360 0,360')).toBe(true)
+  })
+
+  it('shades the northern hemisphere (against the top edge) when the subsolar point is south of the equator', () => {
+    const { container } = render(
+      <GroundTrackView tracks={[]} subsolarPoint={point(-23, 0)} />,
+    )
+    const polygon = container.querySelector('polygon')
+    const points = polygon?.getAttribute('points') ?? ''
+    expect(points.trim().endsWith('720,0 0,0')).toBe(true)
+  })
+})

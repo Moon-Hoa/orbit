@@ -1,4 +1,5 @@
 export * from './celestrakProvider'
 export * from './passPrediction'
 export * from './sgp4'
+export * from './sunPosition'
 export * from './types'

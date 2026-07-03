@@ -154,11 +154,75 @@ describe('OrbitViewer', () => {
   it('updates the time/altitude/speed readouts via refs when the scene ticks', () => {
     render(<OrbitViewer />)
 
-    capturedOptions?.onTick?.({ simTimeSeconds: 125, altitudeKm: 410.456, speedKmS: 7.6612 })
+    capturedOptions?.onTick?.({
+      simTimeSeconds: 125,
+      altitudeKm: 410.456,
+      speedKmS: 7.6612,
+      shadowFraction: null,
+    })
 
     expect(screen.getByTestId('time-readout')).toHaveTextContent('T+00:02:05')
     expect(screen.getByTestId('current-altitude')).toHaveTextContent('410.5 km')
     expect(screen.getByTestId('current-speed')).toHaveTextContent('7.66 km/s')
+  })
+
+  it('does not show an eclipse indicator in design mode', () => {
+    render(<OrbitViewer />)
+
+    act(() => {
+      capturedOptions?.onTick?.({
+        simTimeSeconds: 0,
+        altitudeKm: 400,
+        speedKmS: 7.6,
+        shadowFraction: 1,
+      })
+    })
+
+    expect(screen.queryByTestId('current-eclipse-status')).not.toBeInTheDocument()
+  })
+
+  it('shows in-sunlight/in-eclipse based on shadowFraction once tracking a real satellite', async () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+
+    act(() => {
+      capturedOptions?.onTick?.({
+        simTimeSeconds: 0,
+        altitudeKm: 400,
+        speedKmS: 7.6,
+        shadowFraction: 0,
+      })
+    })
+    expect(screen.getByTestId('current-eclipse-status')).toHaveTextContent('In sunlight')
+
+    act(() => {
+      capturedOptions?.onTick?.({
+        simTimeSeconds: 0,
+        altitudeKm: 400,
+        speedKmS: 7.6,
+        shadowFraction: 1,
+      })
+    })
+    expect(screen.getByTestId('current-eclipse-status')).toHaveTextContent('In eclipse')
+  })
+
+  it('renders the day/night terminator once the scene reports a subsolar point', () => {
+    render(<OrbitViewer />)
+
+    act(() => {
+      capturedOptions?.onSolarUpdate?.({ latitudeRad: 0.2, longitudeRad: 0.5, altitudeKm: 0 })
+    })
+
+    const groundTrack = screen.getByRole('img', { name: 'Ground track' })
+    expect(groundTrack.querySelector('polygon')).not.toBeNull()
+  })
+
+  it('renders no terminator before the scene reports a subsolar point', () => {
+    render(<OrbitViewer />)
+
+    const groundTrack = screen.getByRole('img', { name: 'Ground track' })
+    expect(groundTrack.querySelector('polygon')).toBeNull()
   })
 
   it('renders the ground track when the scene reports an update', () => {

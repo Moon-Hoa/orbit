@@ -29,6 +29,8 @@ function renderPanel(overrides: Partial<Parameters<typeof StatsPanel>[0]> = {}) 
       orbitShape={issLikeShape}
       currentAltitudeRef={createRef()}
       currentSpeedRef={createRef()}
+      currentEclipseStatusRef={createRef()}
+      showEclipseStatus={false}
       primaryLabel="Design orbit"
       companions={[]}
       focusedId={PRIMARY_OBJECT_ID}
@@ -56,6 +58,16 @@ describe('StatsPanel', () => {
   it('does not show the tracked-object list when there are no companions', () => {
     renderPanel()
     expect(screen.queryByText('ISS (ZARYA)')).not.toBeInTheDocument()
+  })
+
+  it('hides the eclipse indicator by default (design mode)', () => {
+    renderPanel()
+    expect(screen.queryByTestId('current-eclipse-status')).not.toBeInTheDocument()
+  })
+
+  it('shows the eclipse indicator when tracking a real satellite', () => {
+    renderPanel({ showEclipseStatus: true })
+    expect(screen.getByTestId('current-eclipse-status')).toBeInTheDocument()
   })
 
   describe('with companions', () => {

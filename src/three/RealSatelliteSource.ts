@@ -60,4 +60,8 @@ export class RealSatelliteSource implements OrbitSource {
   getPeriodSeconds(): number {
     return orbitalPeriodSecondsFromTle(this.tle, this.referenceDate)
   }
+
+  getCurrentDate(simTimeSeconds: number): Date {
+    return this.dateAt(simTimeSeconds)
+  }
 }

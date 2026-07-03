@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { GeodeticCoordinates } from '../engine'
 import { orbitalPeriodSeconds } from '../engine'
 import { type Preset, type Scenario, decodeScenario, encodeScenario } from '../scenario'
 import {
@@ -59,6 +60,7 @@ export function OrbitViewer() {
   const timeReadoutRef = useRef<HTMLSpanElement>(null)
   const currentAltitudeRef = useRef<HTMLSpanElement>(null)
   const currentSpeedRef = useRef<HTMLSpanElement>(null)
+  const currentEclipseStatusRef = useRef<HTMLSpanElement>(null)
   const isApplyingHistoryRef = useRef(false)
   const pendingHistoryPushRef = useRef(false)
   const companionsRef = useRef<CompanionEntry[]>([])
@@ -77,6 +79,7 @@ export function OrbitViewer() {
   const [companions, setCompanions] = useState<CompanionEntry[]>([])
   const [focusedId, setFocusedId] = useState<string>(PRIMARY_OBJECT_ID)
   const [groundTracks, setGroundTracks] = useState<GroundTrack[]>([])
+  const [subsolarPoint, setSubsolarPoint] = useState<GeodeticCoordinates | null>(null)
 
   useEffect(() => {
     companionsRef.current = companions
@@ -137,7 +140,7 @@ export function OrbitViewer() {
     const scene = new OrbitScene(container, {
       initialElements: elements,
       initialCamera: initialScenario?.camera,
-      onTick: ({ simTimeSeconds, altitudeKm, speedKmS }) => {
+      onTick: ({ simTimeSeconds, altitudeKm, speedKmS, shadowFraction }) => {
         if (scrubRef.current) scrubRef.current.value = String(simTimeSeconds)
         if (timeReadoutRef.current) {
           timeReadoutRef.current.textContent = formatElapsed(simTimeSeconds)
@@ -147,6 +150,10 @@ export function OrbitViewer() {
         }
         if (currentSpeedRef.current) {
           currentSpeedRef.current.textContent = `${speedKmS.toFixed(2)} km/s`
+        }
+        if (currentEclipseStatusRef.current) {
+          currentEclipseStatusRef.current.textContent =
+            shadowFraction === null ? '—' : shadowFraction > 0 ? 'In eclipse' : 'In sunlight'
         }
       },
       onGroundTrackUpdate: (tracks) => {
@@ -166,6 +173,7 @@ export function OrbitViewer() {
           }),
         )
       },
+      onSolarUpdate: setSubsolarPoint,
     })
     sceneRef.current = scene
     scene.start()
@@ -315,6 +323,8 @@ export function OrbitViewer() {
         orbitShape={orbitShape}
         currentAltitudeRef={currentAltitudeRef}
         currentSpeedRef={currentSpeedRef}
+        currentEclipseStatusRef={currentEclipseStatusRef}
+        showEclipseStatus={isTrackingReal && focusedId === PRIMARY_OBJECT_ID}
         primaryLabel={primaryLabel}
         companions={companions}
         focusedId={focusedId}
@@ -333,7 +343,7 @@ export function OrbitViewer() {
           />
           <ShareButton getShareUrl={getShareUrl} />
         </div>
-        <GroundTrackView tracks={groundTracks} />
+        <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />
       </div>
       <PlaybackControls
         isPlaying={isPlaying}

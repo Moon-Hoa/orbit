@@ -76,6 +76,9 @@ interface StatsPanelProps {
   orbitShape: OrbitShape
   currentAltitudeRef: RefObject<HTMLSpanElement | null>
   currentSpeedRef: RefObject<HTMLSpanElement | null>
+  currentEclipseStatusRef: RefObject<HTMLSpanElement | null>
+  /** Whether to show the eclipse indicator - only meaningful for a real satellite, and only for the primary object. */
+  showEclipseStatus: boolean
   primaryLabel: string
   companions: CompanionEntry[]
   focusedId: string
@@ -93,6 +96,8 @@ export function StatsPanel({
   orbitShape,
   currentAltitudeRef,
   currentSpeedRef,
+  currentEclipseStatusRef,
+  showEclipseStatus,
   primaryLabel,
   companions,
   focusedId,
@@ -122,6 +127,9 @@ export function StatsPanel({
       <StatRow label="Perigee alt" value={`${perigeeKm.toFixed(0)} km`} />
       <StatRow label="Altitude" valueRef={currentAltitudeRef} testId="current-altitude" />
       <StatRow label="Velocity" valueRef={currentSpeedRef} testId="current-speed" />
+      {showEclipseStatus && (
+        <StatRow label="Sun" valueRef={currentEclipseStatusRef} testId="current-eclipse-status" />
+      )}
 
       {companions.length > 0 && (
         <div className="mt-2 flex flex-col gap-0.5 border-t border-slate-700 pt-2">

@@ -20,4 +20,9 @@ export interface OrbitSource {
   /** Scene-space points tracing one full orbit, for the 3D path line. */
   getOrbitPathPoints(): THREE.Vector3[]
   getPeriodSeconds(): number
+  /**
+   * The absolute calendar date at `simTimeSeconds`, for sources tied to a real
+   * epoch. Omitted for designed orbits, which have no notion of "real" time.
+   */
+  getCurrentDate?(simTimeSeconds: number): Date
 }

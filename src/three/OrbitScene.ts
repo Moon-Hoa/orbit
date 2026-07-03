@@ -7,7 +7,7 @@ import {
   type Vector3,
   magnitude,
 } from '../engine'
-import type { TleRecord } from '../satellite'
+import { type TleRecord, shadowFractionAt, solarSubpointAt } from '../satellite'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
 import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
@@ -28,6 +28,12 @@ export interface TickInfo {
   altitudeKm: number
   /** Current orbital speed, km/s. */
   speedKmS: number
+  /**
+   * Fraction of the primary object's sunlit disc obscured by Earth (0 = lit,
+   * 1 = eclipsed). Null when the primary isn't tied to a real calendar date
+   * (design mode has no notion of "real" sun position).
+   */
+  shadowFraction: number | null
 }
 
 /** Camera position and orbit-controls look-at target, both in scene units. */
@@ -54,6 +60,8 @@ export interface OrbitSceneOptions {
   initialCamera?: CameraState
   onTick?: (info: TickInfo) => void
   onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
+  /** Reported alongside ground tracks (same throttling): the subsolar point, or null in design mode. */
+  onSolarUpdate?: (subsolarPoint: GeodeticCoordinates | null) => void
 }
 
 interface TrackedObject {
@@ -87,6 +95,7 @@ export class OrbitScene {
   private readonly resizeObserver: ResizeObserver
   private readonly onTick?: (info: TickInfo) => void
   private readonly onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
+  private readonly onSolarUpdate?: (subsolarPoint: GeodeticCoordinates | null) => void
 
   private readonly objects = new Map<string, TrackedObject>()
   private focusedObjectId: string = PRIMARY_OBJECT_ID
@@ -101,6 +110,7 @@ export class OrbitScene {
     this.container = container
     this.onTick = options.onTick
     this.onGroundTrackUpdate = options.onGroundTrackUpdate
+    this.onSolarUpdate = options.onSolarUpdate
     this.scene = new THREE.Scene()
 
     this.camera = new THREE.PerspectiveCamera(50, this.aspectRatio, 0.1, 1000)
@@ -276,6 +286,8 @@ export class OrbitScene {
     let focusedAltitudeKm: number | null = null
     let focusedSpeedKmS: number | null = null
     let focusedWrappedSimTime = 0
+    let primaryPositionEciKm: Vector3 | null = null
+    let primaryCurrentDate: Date | null = null
 
     for (const [id, object] of this.objects) {
       const state = object.source.getStateAt(this.simTimeSeconds)
@@ -287,13 +299,24 @@ export class OrbitScene {
         focusedAltitudeKm = magnitude(state.position) - EARTH_RADIUS_KM
         focusedSpeedKmS = magnitude(state.velocity)
       }
+
+      if (id === PRIMARY_OBJECT_ID) {
+        primaryPositionEciKm = state.position
+        primaryCurrentDate = object.source.getCurrentDate?.(this.simTimeSeconds) ?? null
+      }
     }
+
+    const shadowFraction =
+      primaryCurrentDate && primaryPositionEciKm
+        ? shadowFractionAt(primaryCurrentDate, primaryPositionEciKm)
+        : null
 
     if (focusedAltitudeKm !== null && focusedSpeedKmS !== null) {
       this.onTick?.({
         simTimeSeconds: focusedWrappedSimTime,
         altitudeKm: focusedAltitudeKm,
         speedKmS: focusedSpeedKmS,
+        shadowFraction,
       })
     }
 
@@ -302,8 +325,11 @@ export class OrbitScene {
       forceGroundTrack ||
       this.lastGroundTrackReportTime === null ||
       now - this.lastGroundTrackReportTime >= GROUND_TRACK_REPORT_INTERVAL_MS
-    if (dueForReport && this.onGroundTrackUpdate) {
+    if (dueForReport) {
       this.lastGroundTrackReportTime = now
+      this.onSolarUpdate?.(primaryCurrentDate ? solarSubpointAt(primaryCurrentDate) : null)
+    }
+    if (dueForReport && this.onGroundTrackUpdate) {
       const tracks: GroundTrackForObject[] = []
       for (const [id, object] of this.objects) {
         const period = object.source.getPeriodSeconds()
