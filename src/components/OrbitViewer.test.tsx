@@ -85,6 +85,7 @@ beforeEach(() => {
     target: { x: 0, y: 0, z: 0 },
   })
   window.history.replaceState(null, '', '/')
+  localStorage.clear()
   vi.stubGlobal('navigator', {
     ...navigator,
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -164,6 +165,25 @@ describe('OrbitViewer', () => {
     expect(screen.getByTestId('time-readout')).toHaveTextContent('T+00:02:05')
     expect(screen.getByTestId('current-altitude')).toHaveTextContent('410.5 km')
     expect(screen.getByTestId('current-speed')).toHaveTextContent('7.66 km/s')
+  })
+
+  it('switches the live altitude/speed readouts to imperial once toggled in settings, and persists the choice', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Settings'))
+    fireEvent.click(screen.getByRole('button', { name: 'Imperial' }))
+
+    act(() => {
+      capturedOptions?.onTick?.({
+        simTimeSeconds: 0,
+        altitudeKm: 410.456,
+        speedKmS: 7.6612,
+        shadowFraction: null,
+      })
+    })
+
+    expect(screen.getByTestId('current-altitude')).toHaveTextContent('255.0 mi')
+    expect(screen.getByTestId('current-speed')).toHaveTextContent('17138 mph')
+    expect(localStorage.getItem('orbit:unit-system')).toBe('imperial')
   })
 
   it('does not show an eclipse indicator in design mode', () => {

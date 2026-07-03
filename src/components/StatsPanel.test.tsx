@@ -31,6 +31,7 @@ function renderPanel(overrides: Partial<Parameters<typeof StatsPanel>[0]> = {}) 
       currentSpeedRef={createRef()}
       currentEclipseStatusRef={createRef()}
       showEclipseStatus={false}
+      unitSystem="metric"
       primaryLabel="Design orbit"
       companions={[]}
       focusedId={PRIMARY_OBJECT_ID}
@@ -58,6 +59,18 @@ describe('StatsPanel', () => {
   it('does not show the tracked-object list when there are no companions', () => {
     renderPanel()
     expect(screen.queryByText('ISS (ZARYA)')).not.toBeInTheDocument()
+  })
+
+  it('shows apogee/perigee in km by default', () => {
+    renderPanel()
+    expect(screen.getByText('413 km')).toBeInTheDocument()
+    expect(screen.getByText('403 km')).toBeInTheDocument()
+  })
+
+  it('converts apogee/perigee to miles in imperial mode', () => {
+    renderPanel({ unitSystem: 'imperial' })
+    expect(screen.getByText('256 mi')).toBeInTheDocument()
+    expect(screen.getByText('251 mi')).toBeInTheDocument()
   })
 
   it('hides the eclipse indicator by default (design mode)', () => {

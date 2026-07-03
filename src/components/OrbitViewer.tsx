@@ -17,6 +17,7 @@ import {
 } from './companions'
 import { OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
+import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { ElementPanel } from './ElementPanel'
 import { formatElapsed } from './formatElapsed'
 import { GroundStationPanel } from './GroundStationPanel'
@@ -24,11 +25,18 @@ import { GroundTrackView, type GroundTrack } from './GroundTrackView'
 import { ModeToggle, type ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
 import { SatelliteSearch } from './SatelliteSearch'
+import { SettingsPanel } from './SettingsPanel'
 import { ShareButton } from './ShareButton'
 import { StatsPanel } from './StatsPanel'
 
 /** NORAD catalog number for the ISS - used as the default when entering track-real mode. */
 const ISS_NORAD_ID = '25544'
+
+const UNIT_SYSTEM_STORAGE_KEY = 'orbit:unit-system'
+
+function loadStoredUnitSystem(): UnitSystem {
+  return localStorage.getItem(UNIT_SYSTEM_STORAGE_KEY) === 'imperial' ? 'imperial' : 'metric'
+}
 
 function currentSearchParams(): URLSearchParams {
   return new URLSearchParams(window.location.search)
@@ -64,6 +72,7 @@ export function OrbitViewer() {
   const isApplyingHistoryRef = useRef(false)
   const pendingHistoryPushRef = useRef(false)
   const companionsRef = useRef<CompanionEntry[]>([])
+  const unitSystemRef = useRef<UnitSystem>('metric')
 
   const [initialScenario] = useState(() => decodeScenario(currentSearchParams()))
 
@@ -80,10 +89,16 @@ export function OrbitViewer() {
   const [focusedId, setFocusedId] = useState<string>(PRIMARY_OBJECT_ID)
   const [groundTracks, setGroundTracks] = useState<GroundTrack[]>([])
   const [subsolarPoint, setSubsolarPoint] = useState<GeodeticCoordinates | null>(null)
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>(loadStoredUnitSystem)
 
   useEffect(() => {
     companionsRef.current = companions
   }, [companions])
+
+  useEffect(() => {
+    unitSystemRef.current = unitSystem
+    localStorage.setItem(UNIT_SYSTEM_STORAGE_KEY, unitSystem)
+  }, [unitSystem])
 
   const isTrackingReal = mode === 'track-real' && selectedTle !== null
 
@@ -146,10 +161,10 @@ export function OrbitViewer() {
           timeReadoutRef.current.textContent = formatElapsed(simTimeSeconds)
         }
         if (currentAltitudeRef.current) {
-          currentAltitudeRef.current.textContent = `${altitudeKm.toFixed(1)} km`
+          currentAltitudeRef.current.textContent = formatDistanceKm(altitudeKm, unitSystemRef.current)
         }
         if (currentSpeedRef.current) {
-          currentSpeedRef.current.textContent = `${speedKmS.toFixed(2)} km/s`
+          currentSpeedRef.current.textContent = formatSpeedKmS(speedKmS, unitSystemRef.current)
         }
         if (currentEclipseStatusRef.current) {
           currentEclipseStatusRef.current.textContent =
@@ -325,6 +340,7 @@ export function OrbitViewer() {
         currentSpeedRef={currentSpeedRef}
         currentEclipseStatusRef={currentEclipseStatusRef}
         showEclipseStatus={isTrackingReal && focusedId === PRIMARY_OBJECT_ID}
+        unitSystem={unitSystem}
         primaryLabel={primaryLabel}
         companions={companions}
         focusedId={focusedId}
@@ -342,6 +358,7 @@ export function OrbitViewer() {
             }}
           />
           <ShareButton getShareUrl={getShareUrl} />
+          <SettingsPanel unitSystem={unitSystem} onUnitSystemChange={setUnitSystem} />
         </div>
         <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />
       </div>

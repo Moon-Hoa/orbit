@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { apogeeAltitudeKm, orbitalPeriodSeconds, perigeeAltitudeKm } from '../engine'
 import { PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { type CompanionEntry, DEFAULT_PRIMARY_COLOR, colorToCss } from './companions'
+import { type UnitSystem, formatDistanceKm } from './distanceUnits'
 
 interface StatRowProps {
   label: string
@@ -79,6 +80,7 @@ interface StatsPanelProps {
   currentEclipseStatusRef: RefObject<HTMLSpanElement | null>
   /** Whether to show the eclipse indicator - only meaningful for a real satellite, and only for the primary object. */
   showEclipseStatus: boolean
+  unitSystem: UnitSystem
   primaryLabel: string
   companions: CompanionEntry[]
   focusedId: string
@@ -98,6 +100,7 @@ export function StatsPanel({
   currentSpeedRef,
   currentEclipseStatusRef,
   showEclipseStatus,
+  unitSystem,
   primaryLabel,
   companions,
   focusedId,
@@ -123,8 +126,8 @@ export function StatsPanel({
     <div className="absolute bottom-4 left-4 flex w-56 flex-col gap-1 rounded-lg bg-slate-900/80 p-3 text-xs backdrop-blur">
       <h2 className="mb-1 text-sm font-semibold text-slate-100">Stats</h2>
       <StatRow label="Period" value={`${periodMinutes.toFixed(1)} min`} />
-      <StatRow label="Apogee alt" value={`${apogeeKm.toFixed(0)} km`} />
-      <StatRow label="Perigee alt" value={`${perigeeKm.toFixed(0)} km`} />
+      <StatRow label="Apogee alt" value={formatDistanceKm(apogeeKm, unitSystem, 0)} />
+      <StatRow label="Perigee alt" value={formatDistanceKm(perigeeKm, unitSystem, 0)} />
       <StatRow label="Altitude" valueRef={currentAltitudeRef} testId="current-altitude" />
       <StatRow label="Velocity" valueRef={currentSpeedRef} testId="current-speed" />
       {showEclipseStatus && (
