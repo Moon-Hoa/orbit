@@ -8,6 +8,7 @@ import {
   magnitude,
 } from '../engine'
 import { type TleRecord, shadowFractionAt, solarSubpointAt } from '../satellite'
+import { type ClosestApproachResult, findClosestApproach } from './closestApproach'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
 import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
@@ -64,6 +65,8 @@ export interface OrbitSceneOptions {
   onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
   /** Reported alongside ground tracks (same throttling): the subsolar point, or null in design mode. */
   onSolarUpdate?: (subsolarPoint: GeodeticCoordinates | null) => void
+  /** Reported alongside ground tracks (same throttling): closest-approach between the two tracked objects, or null unless exactly two are tracked. */
+  onClosestApproachUpdate?: (result: ClosestApproachResult | null) => void
 }
 
 interface TrackedObject {
@@ -98,6 +101,7 @@ export class OrbitScene {
   private readonly onTick?: (info: TickInfo) => void
   private readonly onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
   private readonly onSolarUpdate?: (subsolarPoint: GeodeticCoordinates | null) => void
+  private readonly onClosestApproachUpdate?: (result: ClosestApproachResult | null) => void
 
   private readonly objects = new Map<string, TrackedObject>()
   private focusedObjectId: string = PRIMARY_OBJECT_ID
@@ -113,6 +117,7 @@ export class OrbitScene {
     this.onTick = options.onTick
     this.onGroundTrackUpdate = options.onGroundTrackUpdate
     this.onSolarUpdate = options.onSolarUpdate
+    this.onClosestApproachUpdate = options.onClosestApproachUpdate
     this.scene = new THREE.Scene()
 
     this.camera = new THREE.PerspectiveCamera(50, this.aspectRatio, 0.1, 1000)
@@ -347,6 +352,14 @@ export class OrbitScene {
         })
       }
       this.onGroundTrackUpdate(tracks)
+    }
+    if (dueForReport && this.onClosestApproachUpdate) {
+      const sources = Array.from(this.objects.values())
+      this.onClosestApproachUpdate(
+        sources.length === 2
+          ? findClosestApproach(sources[0].source, sources[1].source, this.simTimeSeconds)
+          : null,
+      )
     }
   }
 

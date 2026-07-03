@@ -15,9 +15,11 @@ import {
   MAX_COMPANIONS,
   nextCompanionColor,
 } from './companions'
+import type { ClosestApproachResult } from '../three/closestApproach'
 import { OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
+import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
 import { ExportControls } from './ExportControls'
 import { formatElapsed } from './formatElapsed'
@@ -91,6 +93,7 @@ export function OrbitViewer() {
   const [focusedId, setFocusedId] = useState<string>(PRIMARY_OBJECT_ID)
   const [groundTracks, setGroundTracks] = useState<GroundTrack[]>([])
   const [subsolarPoint, setSubsolarPoint] = useState<GeodeticCoordinates | null>(null)
+  const [closestApproach, setClosestApproach] = useState<ClosestApproachResult | null>(null)
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(loadStoredUnitSystem)
   const [enableJ2, setEnableJ2] = useState(false)
 
@@ -192,6 +195,7 @@ export function OrbitViewer() {
         )
       },
       onSolarUpdate: setSubsolarPoint,
+      onClosestApproachUpdate: setClosestApproach,
     })
     sceneRef.current = scene
     scene.start()
@@ -339,19 +343,22 @@ export function OrbitViewer() {
           onAddCompanion={addRealSatelliteCompanion}
         />
       )}
-      <StatsPanel
-        orbitShape={orbitShape}
-        currentAltitudeRef={currentAltitudeRef}
-        currentSpeedRef={currentSpeedRef}
-        currentEclipseStatusRef={currentEclipseStatusRef}
-        showEclipseStatus={isTrackingReal && focusedId === PRIMARY_OBJECT_ID}
-        unitSystem={unitSystem}
-        primaryLabel={primaryLabel}
-        companions={companions}
-        focusedId={focusedId}
-        onFocus={focusObject}
-        onRemoveCompanion={removeCompanion}
-      />
+      <div className="absolute bottom-4 left-4 flex flex-col gap-2">
+        <StatsPanel
+          orbitShape={orbitShape}
+          currentAltitudeRef={currentAltitudeRef}
+          currentSpeedRef={currentSpeedRef}
+          currentEclipseStatusRef={currentEclipseStatusRef}
+          showEclipseStatus={isTrackingReal && focusedId === PRIMARY_OBJECT_ID}
+          unitSystem={unitSystem}
+          primaryLabel={primaryLabel}
+          companions={companions}
+          focusedId={focusedId}
+          onFocus={focusObject}
+          onRemoveCompanion={removeCompanion}
+        />
+        {companions.length === 1 && <ClosestApproachPanel result={closestApproach} />}
+      </div>
       {isTrackingReal && <GroundStationPanel tle={selectedTle} />}
       {mode === 'design' && <HohmannPlanner />}
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2">

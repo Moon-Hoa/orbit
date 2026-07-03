@@ -255,6 +255,27 @@ describe('OrbitViewer', () => {
     expect(groundTrack.querySelector('polygon')).toBeNull()
   })
 
+  it('does not show a closest-approach panel with only the primary object tracked', () => {
+    render(<OrbitViewer />)
+    expect(screen.queryByText('Closest approach')).not.toBeInTheDocument()
+  })
+
+  it('shows the closest-approach panel once exactly two objects are tracked', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+
+    act(() => {
+      capturedOptions?.onClosestApproachUpdate?.({
+        timeToClosestApproachSeconds: 125,
+        minDistanceKm: 1234.5,
+        relativeVelocityKmS: 2.5,
+      })
+    })
+
+    expect(screen.getByText('Closest approach')).toBeInTheDocument()
+    expect(screen.getByText('1234.5 km')).toBeInTheDocument()
+  })
+
   it('renders the ground track when the scene reports an update', () => {
     render(<OrbitViewer />)
 

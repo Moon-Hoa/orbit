@@ -123,7 +123,7 @@ export function StatsPanel({
   )
 
   return (
-    <div className="absolute bottom-4 left-4 flex w-56 flex-col gap-1 rounded-lg bg-slate-900/80 p-3 text-xs backdrop-blur">
+    <div className="flex w-56 flex-col gap-1 rounded-lg bg-slate-900/80 p-3 text-xs backdrop-blur">
       <h2 className="mb-1 text-sm font-semibold text-slate-100">Stats</h2>
       <StatRow label="Period" value={`${periodMinutes.toFixed(1)} min`} />
       <StatRow label="Apogee alt" value={formatDistanceKm(apogeeKm, unitSystem, 0)} />
