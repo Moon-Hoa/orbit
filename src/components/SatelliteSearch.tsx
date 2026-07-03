@@ -4,12 +4,14 @@ import { type TleRecord, parseTleBlock, searchByName } from '../satellite'
 interface SatelliteSearchProps {
   selectedTle: TleRecord | null
   onSelect: (tle: TleRecord) => void
+  /** Adds the satellite as an additional (non-primary) tracked object, if provided. */
+  onAddCompanion?: (tle: TleRecord) => void
 }
 
 type InputMode = 'search' | 'paste'
 
 /** Search Celestrak by name or NORAD ID, or paste a raw TLE, to pick a real satellite to track. */
-export function SatelliteSearch({ selectedTle, onSelect }: SatelliteSearchProps) {
+export function SatelliteSearch({ selectedTle, onSelect, onAddCompanion }: SatelliteSearchProps) {
   const [mode, setMode] = useState<InputMode>('search')
 
   const [query, setQuery] = useState('')
@@ -107,11 +109,11 @@ export function SatelliteSearch({ selectedTle, onSelect }: SatelliteSearchProps)
           {results.length > 0 && (
             <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto text-xs">
               {results.map((tle) => (
-                <li key={tle.noradId}>
+                <li key={tle.noradId} className="flex overflow-hidden rounded">
                   <button
                     type="button"
                     onClick={() => onSelect(tle)}
-                    className={`w-full rounded px-2 py-1 text-left ${
+                    className={`flex-1 px-2 py-1 text-left ${
                       selectedTle?.noradId === tle.noradId
                         ? 'bg-sky-500 text-white'
                         : 'text-slate-200 hover:bg-slate-800'
@@ -119,6 +121,17 @@ export function SatelliteSearch({ selectedTle, onSelect }: SatelliteSearchProps)
                   >
                     {tle.name} <span className="text-slate-400">#{tle.noradId}</span>
                   </button>
+                  {onAddCompanion && (
+                    <button
+                      type="button"
+                      onClick={() => onAddCompanion(tle)}
+                      aria-label={`Add ${tle.name} as companion`}
+                      title="Add as companion"
+                      className="shrink-0 bg-slate-700 px-1.5 text-slate-300 hover:bg-slate-600"
+                    >
+                      +
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

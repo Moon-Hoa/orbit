@@ -1,6 +1,8 @@
 import type { RefObject } from 'react'
 import { useMemo } from 'react'
 import { apogeeAltitudeKm, orbitalPeriodSeconds, perigeeAltitudeKm } from '../engine'
+import { PRIMARY_OBJECT_ID } from '../three/OrbitScene'
+import { type CompanionEntry, DEFAULT_PRIMARY_COLOR, colorToCss } from './companions'
 
 interface StatRowProps {
   label: string
@@ -30,14 +32,73 @@ export interface OrbitShape {
   eccentricity: number
 }
 
+interface TrackedObjectChipProps {
+  label: string
+  color: number
+  isFocused: boolean
+  onFocus: () => void
+  onRemove?: () => void
+}
+
+function TrackedObjectChip({ label, color, isFocused, onFocus, onRemove }: TrackedObjectChipProps) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onFocus}
+        aria-pressed={isFocused}
+        aria-label={`Focus ${label}`}
+        className={`flex flex-1 items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-left ${
+          isFocused ? 'bg-slate-700' : 'hover:bg-slate-800'
+        }`}
+      >
+        <span
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: colorToCss(color) }}
+        />
+        <span className="truncate text-slate-200">{label}</span>
+      </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Stop tracking ${label}`}
+          className="shrink-0 px-1 text-slate-400 hover:text-slate-100"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  )
+}
+
 interface StatsPanelProps {
   orbitShape: OrbitShape
   currentAltitudeRef: RefObject<HTMLSpanElement | null>
   currentSpeedRef: RefObject<HTMLSpanElement | null>
+  primaryLabel: string
+  companions: CompanionEntry[]
+  focusedId: string
+  onFocus: (id: string) => void
+  onRemoveCompanion: (id: string) => void
 }
 
-/** Derived orbit stats: period/apogee/perigee (from orbit shape) plus live altitude/speed (ref-driven). */
-export function StatsPanel({ orbitShape, currentAltitudeRef, currentSpeedRef }: StatsPanelProps) {
+/**
+ * Derived orbit stats (period/apogee/perigee from shape, plus live
+ * altitude/speed via refs) for the focused tracked object, plus a list of
+ * every tracked object (primary + companions) to switch focus or stop
+ * tracking a companion.
+ */
+export function StatsPanel({
+  orbitShape,
+  currentAltitudeRef,
+  currentSpeedRef,
+  primaryLabel,
+  companions,
+  focusedId,
+  onFocus,
+  onRemoveCompanion,
+}: StatsPanelProps) {
   const { semiMajorAxisKm, eccentricity } = orbitShape
 
   const periodMinutes = useMemo(
@@ -61,6 +122,27 @@ export function StatsPanel({ orbitShape, currentAltitudeRef, currentSpeedRef }: 
       <StatRow label="Perigee alt" value={`${perigeeKm.toFixed(0)} km`} />
       <StatRow label="Altitude" valueRef={currentAltitudeRef} testId="current-altitude" />
       <StatRow label="Velocity" valueRef={currentSpeedRef} testId="current-speed" />
+
+      {companions.length > 0 && (
+        <div className="mt-2 flex flex-col gap-0.5 border-t border-slate-700 pt-2">
+          <TrackedObjectChip
+            label={primaryLabel}
+            color={DEFAULT_PRIMARY_COLOR}
+            isFocused={focusedId === PRIMARY_OBJECT_ID}
+            onFocus={() => onFocus(PRIMARY_OBJECT_ID)}
+          />
+          {companions.map((companion) => (
+            <TrackedObjectChip
+              key={companion.id}
+              label={companion.label}
+              color={companion.color}
+              isFocused={focusedId === companion.id}
+              onFocus={() => onFocus(companion.id)}
+              onRemove={() => onRemoveCompanion(companion.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

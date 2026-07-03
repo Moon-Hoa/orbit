@@ -1,6 +1,7 @@
 import earthDaymapUrl from '../assets/earth-daymap.jpg'
 import type { GeodeticCoordinates } from '../engine'
 import { radToDeg } from './angleUnits'
+import { colorToCss } from './companions'
 
 const WIDTH = 720
 const HEIGHT = 360
@@ -24,15 +25,20 @@ function splitAtAntimeridian(points: GeodeticCoordinates[]): GeodeticCoordinates
   return segments
 }
 
-interface GroundTrackViewProps {
+/** One tracked object's ground track, colored to match its 3D counterpart. */
+export interface GroundTrack {
+  id: string
+  pathColor: number
+  markerColor: number
   points: GeodeticCoordinates[]
 }
 
-/** 2D equirectangular ground track: the satellite subpoint traced over a trailing time window. */
-export function GroundTrackView({ points }: GroundTrackViewProps) {
-  const segments = splitAtAntimeridian(points)
-  const current = points.at(-1)
+interface GroundTrackViewProps {
+  tracks: GroundTrack[]
+}
 
+/** 2D equirectangular ground track: every tracked object's subpoint, traced over a trailing time window. */
+export function GroundTrackView({ tracks }: GroundTrackViewProps) {
   return (
     <div
       className="relative w-80 max-w-[80vw] overflow-hidden rounded-lg bg-slate-900/80 backdrop-blur"
@@ -52,23 +58,36 @@ export function GroundTrackView({ points }: GroundTrackViewProps) {
         role="img"
         aria-label="Ground track"
       >
-        {segments.map((segment, index) => (
-          <polyline
-            key={index}
-            points={segment.map((p) => `${lonToX(p.longitudeRad)},${latToY(p.latitudeRad)}`).join(' ')}
-            fill="none"
-            stroke="#38bdf8"
-            strokeWidth={1.5}
-          />
-        ))}
-        {current && (
-          <circle
-            cx={lonToX(current.longitudeRad)}
-            cy={latToY(current.latitudeRad)}
-            r={3.5}
-            fill="#ffffff"
-          />
-        )}
+        {tracks.map((track) => {
+          const segments = splitAtAntimeridian(track.points)
+          const current = track.points.at(-1)
+          const pathCss = colorToCss(track.pathColor)
+          const markerCss = colorToCss(track.markerColor)
+
+          return (
+            <g key={track.id}>
+              {segments.map((segment, index) => (
+                <polyline
+                  key={index}
+                  points={segment
+                    .map((p) => `${lonToX(p.longitudeRad)},${latToY(p.latitudeRad)}`)
+                    .join(' ')}
+                  fill="none"
+                  stroke={pathCss}
+                  strokeWidth={1.5}
+                />
+              ))}
+              {current && (
+                <circle
+                  cx={lonToX(current.longitudeRad)}
+                  cy={latToY(current.latitudeRad)}
+                  r={3.5}
+                  fill={markerCss}
+                />
+              )}
+            </g>
+          )
+        })}
       </svg>
     </div>
   )

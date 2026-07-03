@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type GeodeticCoordinates, orbitalPeriodSeconds } from '../engine'
-import { type Scenario, decodeScenario, encodeScenario } from '../scenario'
+import { orbitalPeriodSeconds } from '../engine'
+import { type Preset, type Scenario, decodeScenario, encodeScenario } from '../scenario'
 import {
   type TleRecord,
   approximateElementsFromTle,
   fetchByNoradId,
   orbitalPeriodSecondsFromTle,
 } from '../satellite'
-import { OrbitScene } from '../three/OrbitScene'
+import {
+  type CompanionEntry,
+  DEFAULT_PRIMARY_COLOR,
+  DEFAULT_PRIMARY_MARKER_COLOR,
+  MAX_COMPANIONS,
+  nextCompanionColor,
+} from './companions'
+import { OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { ElementPanel } from './ElementPanel'
 import { formatElapsed } from './formatElapsed'
 import { GroundStationPanel } from './GroundStationPanel'
-import { GroundTrackView } from './GroundTrackView'
+import { GroundTrackView, type GroundTrack } from './GroundTrackView'
 import { ModeToggle, type ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
 import { SatelliteSearch } from './SatelliteSearch'
@@ -33,15 +40,17 @@ function urlForScenario(scenario: Scenario): string {
 
 /**
  * Thin React boundary around the Three.js scene: owns UI state (elements,
- * selected real satellite, playback) and pushes it into the OrbitScene
- * instance imperatively, rather than letting React re-render drive the
- * render loop.
+ * selected real satellite, companions, playback) and pushes it into the
+ * OrbitScene instance imperatively, rather than letting React re-render
+ * drive the render loop.
  *
  * The current scenario (mode, elements/satellite, speed, camera) is kept
  * synced to the URL: continuous edits (slider drags) use replaceState so
  * they don't spam browser history, while discrete actions (mode switch,
  * preset select, satellite pick) use pushState, so the back button steps
- * through them like an undo stack.
+ * through them like an undo stack. Companion objects are not part of the
+ * shareable URL yet (see scenario/urlCodec.ts) - shared links reproduce the
+ * primary object only.
  */
 export function OrbitViewer() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -52,6 +61,7 @@ export function OrbitViewer() {
   const currentSpeedRef = useRef<HTMLSpanElement>(null)
   const isApplyingHistoryRef = useRef(false)
   const pendingHistoryPushRef = useRef(false)
+  const companionsRef = useRef<CompanionEntry[]>([])
 
   const [initialScenario] = useState(() => decodeScenario(currentSearchParams()))
 
@@ -64,19 +74,45 @@ export function OrbitViewer() {
   const [speedMultiplier, setSpeedMultiplier] = useState(
     () => initialScenario?.speedMultiplier ?? 60,
   )
-  const [groundTrackPoints, setGroundTrackPoints] = useState<GeodeticCoordinates[]>([])
+  const [companions, setCompanions] = useState<CompanionEntry[]>([])
+  const [focusedId, setFocusedId] = useState<string>(PRIMARY_OBJECT_ID)
+  const [groundTracks, setGroundTracks] = useState<GroundTrack[]>([])
+
+  useEffect(() => {
+    companionsRef.current = companions
+  }, [companions])
 
   const isTrackingReal = mode === 'track-real' && selectedTle !== null
+
+  // Focus follows the primary object whenever it's replaced (a new search
+  // selection, a new preset, or a mode switch); companions stay put so
+  // comparisons persist across edits to the thing being compared against.
+  useEffect(() => {
+    setFocusedId(PRIMARY_OBJECT_ID)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, elements, selectedTle])
 
   const periodSeconds = useMemo(() => {
     if (isTrackingReal) return orbitalPeriodSecondsFromTle(selectedTle, new Date())
     return orbitalPeriodSeconds(elements.semiMajorAxisKm)
   }, [isTrackingReal, selectedTle, elements.semiMajorAxisKm])
 
+  const focusedCompanion = companions.find((companion) => companion.id === focusedId)
+
+  const primaryLabel = isTrackingReal ? selectedTle.name : 'Design orbit'
+
   const orbitShape = useMemo(() => {
+    if (focusedCompanion) {
+      return focusedCompanion.source.type === 'real'
+        ? approximateElementsFromTle(focusedCompanion.source.tle, new Date())
+        : {
+            semiMajorAxisKm: focusedCompanion.source.elements.semiMajorAxisKm,
+            eccentricity: focusedCompanion.source.elements.eccentricity,
+          }
+    }
     if (isTrackingReal) return approximateElementsFromTle(selectedTle, new Date())
     return { semiMajorAxisKm: elements.semiMajorAxisKm, eccentricity: elements.eccentricity }
-  }, [isTrackingReal, selectedTle, elements.semiMajorAxisKm, elements.eccentricity])
+  }, [focusedCompanion, isTrackingReal, selectedTle, elements.semiMajorAxisKm, elements.eccentricity])
 
   /** Marks the next URL sync as a history checkpoint (pushState) rather than a silent update. */
   function markDiscreteChange() {
@@ -113,7 +149,23 @@ export function OrbitViewer() {
           currentSpeedRef.current.textContent = `${speedKmS.toFixed(2)} km/s`
         }
       },
-      onGroundTrackUpdate: setGroundTrackPoints,
+      onGroundTrackUpdate: (tracks) => {
+        setGroundTracks(
+          tracks.map(({ id, points }) => {
+            if (id === PRIMARY_OBJECT_ID) {
+              return {
+                id,
+                pathColor: DEFAULT_PRIMARY_COLOR,
+                markerColor: DEFAULT_PRIMARY_MARKER_COLOR,
+                points,
+              }
+            }
+            const companion = companionsRef.current.find((c) => c.id === id)
+            const color = companion?.color ?? DEFAULT_PRIMARY_COLOR
+            return { id, pathColor: color, markerColor: color, points }
+          }),
+        )
+      },
     })
     sceneRef.current = scene
     scene.start()
@@ -205,6 +257,36 @@ export function OrbitViewer() {
     return `${window.location.origin}${urlForScenario(scenario)}`
   }
 
+  function addRealSatelliteCompanion(tle: TleRecord) {
+    const id = `real:${tle.noradId}`
+    if (companions.some((c) => c.id === id) || companions.length >= MAX_COMPANIONS) return
+    const color = nextCompanionColor(companions.length)
+    sceneRef.current?.addRealSatelliteCompanion(id, tle, color)
+    setCompanions((prev) => [...prev, { id, label: tle.name, color, source: { type: 'real', tle } }])
+  }
+
+  function addDesignCompanion(preset: Preset) {
+    const id = `design:${preset.id}`
+    if (companions.some((c) => c.id === id) || companions.length >= MAX_COMPANIONS) return
+    const color = nextCompanionColor(companions.length)
+    sceneRef.current?.addDesignCompanion(id, preset.elements, color)
+    setCompanions((prev) => [
+      ...prev,
+      { id, label: preset.label, color, source: { type: 'design', elements: preset.elements } },
+    ])
+  }
+
+  function removeCompanion(id: string) {
+    sceneRef.current?.removeObject(id)
+    setCompanions((prev) => prev.filter((c) => c.id !== id))
+    if (focusedId === id) setFocusedId(PRIMARY_OBJECT_ID)
+  }
+
+  function focusObject(id: string) {
+    setFocusedId(id)
+    sceneRef.current?.setFocusedObject(id)
+  }
+
   return (
     <div className="relative h-screen w-screen bg-black">
       <div ref={containerRef} className="absolute inset-0" />
@@ -217,6 +299,7 @@ export function OrbitViewer() {
             markDiscreteChange()
             setElements(presetElements)
           }}
+          onAddCompanion={addDesignCompanion}
         />
       ) : (
         <SatelliteSearch
@@ -225,12 +308,18 @@ export function OrbitViewer() {
             markDiscreteChange()
             setSelectedTle(tle)
           }}
+          onAddCompanion={addRealSatelliteCompanion}
         />
       )}
       <StatsPanel
         orbitShape={orbitShape}
         currentAltitudeRef={currentAltitudeRef}
         currentSpeedRef={currentSpeedRef}
+        primaryLabel={primaryLabel}
+        companions={companions}
+        focusedId={focusedId}
+        onFocus={focusObject}
+        onRemoveCompanion={removeCompanion}
       />
       {isTrackingReal && <GroundStationPanel tle={selectedTle} />}
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
@@ -244,7 +333,7 @@ export function OrbitViewer() {
           />
           <ShareButton getShareUrl={getShareUrl} />
         </div>
-        <GroundTrackView points={groundTrackPoints} />
+        <GroundTrackView tracks={groundTracks} />
       </div>
       <PlaybackControls
         isPlaying={isPlaying}

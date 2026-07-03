@@ -118,6 +118,9 @@ function writeCache<T>(key: string, data: T): void {
 
 async function fetchTleText(url: string): Promise<string> {
   const response = await fetch(url)
+  // Celestrak responds 404 (not 200-with-empty-body) when a query matches
+  // nothing - that's a legitimate "no results" outcome, not a request failure.
+  if (response.status === 404) return ''
   if (!response.ok) {
     throw new Error(`Celestrak request failed: ${response.status} ${response.statusText}`)
   }

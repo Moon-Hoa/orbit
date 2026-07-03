@@ -13,30 +13,42 @@ const setSpeedMultiplierMock = vi.fn()
 const seekMock = vi.fn()
 const getCameraStateMock = vi.fn()
 const setCameraStateMock = vi.fn()
+const addRealSatelliteCompanionMock = vi.fn()
+const addDesignCompanionMock = vi.fn()
+const removeObjectMock = vi.fn()
+const setFocusedObjectMock = vi.fn()
 
 let capturedOptions: OrbitSceneOptions | null = null
 
-vi.mock('../three/OrbitScene', () => ({
-  OrbitScene: vi.fn().mockImplementation(function MockOrbitScene(
-    this: object,
-    _container: HTMLElement,
-    options: OrbitSceneOptions,
-  ) {
-    capturedOptions = options
-    return Object.assign(this, {
-      start: startMock,
-      dispose: disposeMock,
-      setDesignElements: setDesignElementsMock,
-      setRealSatellite: setRealSatelliteMock,
-      play: playMock,
-      pause: pauseMock,
-      setSpeedMultiplier: setSpeedMultiplierMock,
-      seek: seekMock,
-      getCameraState: getCameraStateMock,
-      setCameraState: setCameraStateMock,
-    })
-  }),
-}))
+vi.mock('../three/OrbitScene', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../three/OrbitScene')>()
+  return {
+    ...actual,
+    OrbitScene: vi.fn().mockImplementation(function MockOrbitScene(
+      this: object,
+      _container: HTMLElement,
+      options: OrbitSceneOptions,
+    ) {
+      capturedOptions = options
+      return Object.assign(this, {
+        start: startMock,
+        dispose: disposeMock,
+        setDesignElements: setDesignElementsMock,
+        setRealSatellite: setRealSatelliteMock,
+        play: playMock,
+        pause: pauseMock,
+        setSpeedMultiplier: setSpeedMultiplierMock,
+        seek: seekMock,
+        getCameraState: getCameraStateMock,
+        setCameraState: setCameraStateMock,
+        addRealSatelliteCompanion: addRealSatelliteCompanionMock,
+        addDesignCompanion: addDesignCompanionMock,
+        removeObject: removeObjectMock,
+        setFocusedObject: setFocusedObjectMock,
+      })
+    }),
+  }
+})
 
 const fetchByNoradIdMock = vi.fn()
 const searchByNameMock = vi.fn()
@@ -154,14 +166,34 @@ describe('OrbitViewer', () => {
 
     act(() => {
       capturedOptions?.onGroundTrackUpdate?.([
-        { latitudeRad: 0, longitudeRad: 0, altitudeKm: 408 },
-        { latitudeRad: 0.1, longitudeRad: 0.1, altitudeKm: 408 },
+        {
+          id: 'primary',
+          points: [
+            { latitudeRad: 0, longitudeRad: 0, altitudeKm: 408 },
+            { latitudeRad: 0.1, longitudeRad: 0.1, altitudeKm: 408 },
+          ],
+        },
       ])
     })
 
     const groundTrack = screen.getByRole('img', { name: 'Ground track' })
     expect(groundTrack.querySelectorAll('polyline')).toHaveLength(1)
     expect(groundTrack.querySelectorAll('circle')).toHaveLength(1)
+  })
+
+  it('renders one track per object once a companion is added', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+
+    act(() => {
+      capturedOptions?.onGroundTrackUpdate?.([
+        { id: 'primary', points: [{ latitudeRad: 0, longitudeRad: 0, altitudeKm: 408 }] },
+        { id: 'design:geo', points: [{ latitudeRad: 0, longitudeRad: 1, altitudeKm: 35786 }] },
+      ])
+    })
+
+    const groundTrack = screen.getByRole('img', { name: 'Ground track' })
+    expect(groundTrack.querySelectorAll('circle')).toHaveLength(2)
   })
 
   it('switches to the satellite search UI and auto-selects the ISS on entering track-real mode', async () => {
@@ -191,7 +223,7 @@ describe('OrbitViewer', () => {
     fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'nauka' } })
     fireEvent.click(screen.getByRole('button', { name: 'Search' }))
 
-    const resultButton = await screen.findByRole('button', { name: /ISS \(NAUKA\)/ })
+    const resultButton = await screen.findByRole('button', { name: 'ISS (NAUKA) #49044' })
     fireEvent.click(resultButton)
 
     await waitFor(() => expect(setRealSatelliteMock).toHaveBeenCalledWith(NAUKA_TLE))
@@ -292,5 +324,85 @@ describe('OrbitViewer URL scenario sync', () => {
 
     expect(fetchByNoradIdMock).toHaveBeenCalledWith('49044')
     await screen.findByText('ISS (NAUKA)')
+  })
+})
+
+describe('OrbitViewer companions', () => {
+  it('adds a design preset as a companion via its + button, without replacing the primary', () => {
+    render(<OrbitViewer />)
+    setDesignElementsMock.mockClear()
+
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+
+    expect(addDesignCompanionMock).toHaveBeenCalledWith(
+      'design:geo',
+      expect.objectContaining({ eccentricity: 0 }),
+      expect.any(Number),
+    )
+    expect(setDesignElementsMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Focus GEO' })).toBeInTheDocument()
+  })
+
+  it('does not add the same design companion twice', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+    addDesignCompanionMock.mockClear()
+
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+    expect(addDesignCompanionMock).not.toHaveBeenCalled()
+  })
+
+  it('adds a searched satellite as a companion via its + button, without replacing the primary', async () => {
+    searchByNameMock.mockResolvedValue([NAUKA_TLE])
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+    setRealSatelliteMock.mockClear()
+
+    fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'nauka' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    const addButton = await screen.findByLabelText('Add ISS (NAUKA) as companion')
+    fireEvent.click(addButton)
+
+    expect(addRealSatelliteCompanionMock).toHaveBeenCalledWith(
+      'real:49044',
+      NAUKA_TLE,
+      expect.any(Number),
+    )
+    expect(setRealSatelliteMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Focus ISS (NAUKA)' })).toBeInTheDocument()
+  })
+
+  it('removes a companion via its stop-tracking button', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+
+    fireEvent.click(screen.getByLabelText('Stop tracking GEO'))
+
+    expect(removeObjectMock).toHaveBeenCalledWith('design:geo')
+    expect(screen.queryByRole('button', { name: 'Focus GEO' })).not.toBeInTheDocument()
+  })
+
+  it('focuses a companion when clicked, updating displayed stats and calling scene.setFocusedObject', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Focus GEO' }))
+
+    expect(setFocusedObjectMock).toHaveBeenCalledWith('design:geo')
+    // GEO's period is ~1 sidereal day (~1436.1 min), distinct from the ISS-like primary's ~92.7 min.
+    expect(screen.getByText('1436.1 min')).toBeInTheDocument()
+  })
+
+  it('resets focus back to the primary object once its elements change', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+    fireEvent.click(screen.getByRole('button', { name: 'Focus GEO' }))
+    expect(screen.getByText('1436.1 min')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('a value'), { target: { value: '7500' } })
+
+    expect(screen.queryByText('1436.1 min')).not.toBeInTheDocument()
   })
 })

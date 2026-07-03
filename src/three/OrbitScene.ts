@@ -11,12 +11,15 @@ import type { TleRecord } from '../satellite'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
 import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
-import { createOrbitPath } from './createOrbitPath'
-import { createSatelliteMarker } from './createSatelliteMarker'
+import { DEFAULT_ORBIT_PATH_COLOR, createOrbitPath } from './createOrbitPath'
+import { DEFAULT_MARKER_COLOR, createSatelliteMarker } from './createSatelliteMarker'
 import { DesignOrbitSource } from './DesignOrbitSource'
 import { disposeObject3D } from './disposeObject3D'
 import type { OrbitSource } from './OrbitSource'
 import { RealSatelliteSource } from './RealSatelliteSource'
+
+/** The id of the always-present, fully-editable object driven by setDesignElements/setRealSatellite. */
+export const PRIMARY_OBJECT_ID = 'primary'
 
 export interface TickInfo {
   /** Elapsed sim time, wrapped to [0, orbital period). */
@@ -33,7 +36,13 @@ export interface CameraState {
   target: Vector3
 }
 
-/** How often (wall-clock ms) the ground track is recomputed and reported. */
+/** One tracked object's ground track, reported alongside its id so the UI can color-match it. */
+export interface GroundTrackForObject {
+  id: string
+  points: GeodeticCoordinates[]
+}
+
+/** How often (wall-clock ms) ground tracks are recomputed and reported. */
 const GROUND_TRACK_REPORT_INTERVAL_MS = 200
 /** How many trailing orbital periods the ground track window covers. */
 const GROUND_TRACK_WINDOW_PERIODS = 1.5
@@ -44,7 +53,13 @@ export interface OrbitSceneOptions {
   initialElements: OrbitalElements
   initialCamera?: CameraState
   onTick?: (info: TickInfo) => void
-  onGroundTrackUpdate?: (points: GeodeticCoordinates[]) => void
+  onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
+}
+
+interface TrackedObject {
+  source: OrbitSource
+  orbitPath: THREE.Mesh
+  satelliteMarker: THREE.Mesh
 }
 
 /**
@@ -53,9 +68,15 @@ export interface OrbitSceneOptions {
  * control; the React side only mounts/unmounts an instance and calls its
  * imperative methods (setDesignElements/setRealSatellite/play/pause/seek/...).
  *
- * The satellite marker/ground track/orbit-path-line logic doesn't care
- * whether it's driven by a designed two-body orbit or a real SGP4-propagated
- * satellite - both are just an `OrbitSource` (see OrbitSource.ts).
+ * Tracks a collection of objects, each just an `OrbitSource` (see
+ * OrbitSource.ts) plus a color - so it doesn't care whether any given one is
+ * a designed two-body orbit or a real SGP4-propagated satellite. There's
+ * always exactly one "primary" object (driven by setDesignElements/
+ * setRealSatellite, the same API this class has always had); additional
+ * "companion" objects can be added/removed independently for side-by-side
+ * comparison. One shared sim clock drives all of them. Stats/ground-track
+ * reporting focuses on a single "focused" object at a time (default:
+ * primary), switchable via setFocusedObject.
  */
 export class OrbitScene {
   private readonly container: HTMLElement
@@ -64,12 +85,11 @@ export class OrbitScene {
   private readonly camera: THREE.PerspectiveCamera
   private readonly controls: OrbitControls
   private readonly resizeObserver: ResizeObserver
-  private readonly satelliteMarker: THREE.Mesh
   private readonly onTick?: (info: TickInfo) => void
-  private readonly onGroundTrackUpdate?: (points: GeodeticCoordinates[]) => void
+  private readonly onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
 
-  private orbitPath: THREE.Mesh
-  private source: OrbitSource
+  private readonly objects = new Map<string, TrackedObject>()
+  private focusedObjectId: string = PRIMARY_OBJECT_ID
   private simTimeSeconds = 0
   private isPlaying = false
   private speedMultiplier = 60
@@ -79,7 +99,6 @@ export class OrbitScene {
 
   constructor(container: HTMLElement, options: OrbitSceneOptions) {
     this.container = container
-    this.source = new DesignOrbitSource(options.initialElements)
     this.onTick = options.onTick
     this.onGroundTrackUpdate = options.onGroundTrackUpdate
     this.scene = new THREE.Scene()
@@ -119,11 +138,14 @@ export class OrbitScene {
 
     this.scene.add(createEarth())
 
-    this.orbitPath = createOrbitPath(this.source.getOrbitPathPoints())
-    this.scene.add(this.orbitPath)
-
-    this.satelliteMarker = createSatelliteMarker()
-    this.scene.add(this.satelliteMarker)
+    this.objects.set(
+      PRIMARY_OBJECT_ID,
+      this.createTrackedObject(
+        new DesignOrbitSource(options.initialElements),
+        DEFAULT_ORBIT_PATH_COLOR,
+        DEFAULT_MARKER_COLOR,
+      ),
+    )
     this.syncToCurrentState(true)
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
@@ -140,55 +162,80 @@ export class OrbitScene {
     this.renderer.setSize(this.container.clientWidth, this.container.clientHeight)
   }
 
-  /** Recomputes the current state vector once and applies it everywhere it's needed. */
-  private syncToCurrentState(forceGroundTrack: boolean): void {
-    const state = this.source.getStateAt(this.simTimeSeconds)
-    this.satelliteMarker.position.copy(eciToScene(state.position))
-
-    const period = this.source.getPeriodSeconds()
-    const wrappedSimTime = ((this.simTimeSeconds % period) + period) % period
-    this.onTick?.({
-      simTimeSeconds: wrappedSimTime,
-      altitudeKm: magnitude(state.position) - EARTH_RADIUS_KM,
-      speedKmS: magnitude(state.velocity),
-    })
-
-    const now = performance.now()
-    const dueForReport =
-      forceGroundTrack ||
-      this.lastGroundTrackReportTime === null ||
-      now - this.lastGroundTrackReportTime >= GROUND_TRACK_REPORT_INTERVAL_MS
-    if (dueForReport && this.onGroundTrackUpdate) {
-      this.lastGroundTrackReportTime = now
-      const windowSeconds = period * GROUND_TRACK_WINDOW_PERIODS
-      const sampleIntervalSeconds = windowSeconds / GROUND_TRACK_SAMPLE_COUNT
-      this.onGroundTrackUpdate(
-        this.source.getGroundTrack(this.simTimeSeconds, windowSeconds, sampleIntervalSeconds),
-      )
-    }
+  private createTrackedObject(
+    source: OrbitSource,
+    pathColor: number,
+    markerColor: number,
+  ): TrackedObject {
+    const orbitPath = createOrbitPath(source.getOrbitPathPoints(), pathColor)
+    const satelliteMarker = createSatelliteMarker(markerColor)
+    this.scene.add(orbitPath)
+    this.scene.add(satelliteMarker)
+    return { source, orbitPath, satelliteMarker }
   }
 
-  /** Swaps the active orbit source, rebuilding the path and repositioning the satellite. */
-  private setSource(source: OrbitSource, resetTime: boolean): void {
-    this.source = source
+  private disposeTrackedObject(object: TrackedObject): void {
+    this.scene.remove(object.orbitPath)
+    this.scene.remove(object.satelliteMarker)
+    disposeObject3D(object.orbitPath)
+    disposeObject3D(object.satelliteMarker)
+  }
+
+  private replacePrimary(source: OrbitSource, resetTime: boolean): void {
+    const existing = this.objects.get(PRIMARY_OBJECT_ID)
+    if (existing) this.disposeTrackedObject(existing)
+    this.objects.set(
+      PRIMARY_OBJECT_ID,
+      this.createTrackedObject(source, DEFAULT_ORBIT_PATH_COLOR, DEFAULT_MARKER_COLOR),
+    )
     if (resetTime) this.simTimeSeconds = 0
-
-    this.scene.remove(this.orbitPath)
-    disposeObject3D(this.orbitPath)
-    this.orbitPath = createOrbitPath(source.getOrbitPathPoints())
-    this.scene.add(this.orbitPath)
-
+    this.focusedObjectId = PRIMARY_OBJECT_ID
     this.syncToCurrentState(true)
   }
 
-  /** Switches to (or updates) a user-designed two-body orbit. Keeps the current sim time. */
+  /** Switches to (or updates) the primary user-designed two-body orbit. Keeps the current sim time. */
   setDesignElements(elements: OrbitalElements): void {
-    this.setSource(new DesignOrbitSource(elements), false)
+    this.replacePrimary(new DesignOrbitSource(elements), false)
   }
 
-  /** Switches to tracking a real satellite via its TLE, starting the clock fresh at "now". */
+  /** Switches the primary object to tracking a real satellite via its TLE, starting the clock fresh at "now". */
   setRealSatellite(tle: TleRecord): void {
-    this.setSource(new RealSatelliteSource(tle, new Date()), true)
+    this.replacePrimary(new RealSatelliteSource(tle, new Date()), true)
+  }
+
+  /** Adds an additional real satellite alongside the primary object. No-ops if `id` is already tracked. */
+  addRealSatelliteCompanion(id: string, tle: TleRecord, color: number): void {
+    if (this.objects.has(id)) return
+    this.objects.set(id, this.createTrackedObject(new RealSatelliteSource(tle, new Date()), color, color))
+    this.syncToCurrentState(true)
+  }
+
+  /** Adds an additional design orbit alongside the primary object. No-ops if `id` is already tracked. */
+  addDesignCompanion(id: string, elements: OrbitalElements, color: number): void {
+    if (this.objects.has(id)) return
+    this.objects.set(id, this.createTrackedObject(new DesignOrbitSource(elements), color, color))
+    this.syncToCurrentState(true)
+  }
+
+  /** Stops tracking a companion object. No-ops for the primary object or an unknown id. */
+  removeObject(id: string): void {
+    if (id === PRIMARY_OBJECT_ID) return
+    const object = this.objects.get(id)
+    if (!object) return
+
+    this.disposeTrackedObject(object)
+    this.objects.delete(id)
+    if (this.focusedObjectId === id) {
+      this.focusedObjectId = PRIMARY_OBJECT_ID
+    }
+    this.syncToCurrentState(true)
+  }
+
+  /** Switches which tracked object's stats are reported via onTick. No-ops for an unknown id. */
+  setFocusedObject(id: string): void {
+    if (!this.objects.has(id)) return
+    this.focusedObjectId = id
+    this.syncToCurrentState(true)
   }
 
   play(): void {
@@ -218,10 +265,61 @@ export class OrbitScene {
     this.controls.update()
   }
 
-  /** Seeks to a given elapsed sim time (seconds since epoch) and repositions the satellite. */
+  /** Seeks to a given elapsed sim time (seconds since epoch) and repositions every tracked object. */
   seek(simTimeSeconds: number): void {
     this.simTimeSeconds = simTimeSeconds
     this.syncToCurrentState(true)
+  }
+
+  /** Repositions every tracked object at the current sim time, and reports focused-object stats/ground tracks. */
+  private syncToCurrentState(forceGroundTrack: boolean): void {
+    let focusedAltitudeKm: number | null = null
+    let focusedSpeedKmS: number | null = null
+    let focusedWrappedSimTime = 0
+
+    for (const [id, object] of this.objects) {
+      const state = object.source.getStateAt(this.simTimeSeconds)
+      object.satelliteMarker.position.copy(eciToScene(state.position))
+
+      if (id === this.focusedObjectId) {
+        const period = object.source.getPeriodSeconds()
+        focusedWrappedSimTime = ((this.simTimeSeconds % period) + period) % period
+        focusedAltitudeKm = magnitude(state.position) - EARTH_RADIUS_KM
+        focusedSpeedKmS = magnitude(state.velocity)
+      }
+    }
+
+    if (focusedAltitudeKm !== null && focusedSpeedKmS !== null) {
+      this.onTick?.({
+        simTimeSeconds: focusedWrappedSimTime,
+        altitudeKm: focusedAltitudeKm,
+        speedKmS: focusedSpeedKmS,
+      })
+    }
+
+    const now = performance.now()
+    const dueForReport =
+      forceGroundTrack ||
+      this.lastGroundTrackReportTime === null ||
+      now - this.lastGroundTrackReportTime >= GROUND_TRACK_REPORT_INTERVAL_MS
+    if (dueForReport && this.onGroundTrackUpdate) {
+      this.lastGroundTrackReportTime = now
+      const tracks: GroundTrackForObject[] = []
+      for (const [id, object] of this.objects) {
+        const period = object.source.getPeriodSeconds()
+        const windowSeconds = period * GROUND_TRACK_WINDOW_PERIODS
+        const sampleIntervalSeconds = windowSeconds / GROUND_TRACK_SAMPLE_COUNT
+        tracks.push({
+          id,
+          points: object.source.getGroundTrack(
+            this.simTimeSeconds,
+            windowSeconds,
+            sampleIntervalSeconds,
+          ),
+        })
+      }
+      this.onGroundTrackUpdate(tracks)
+    }
   }
 
   start(): void {

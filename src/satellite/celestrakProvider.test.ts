@@ -154,7 +154,15 @@ describe('celestrakProvider', () => {
     await expect(fetchByNoradId('0')).rejects.toThrow()
   })
 
-  it('fetchByNoradId throws on a non-ok response', async () => {
+  it('fetchByNoradId throws a clear "not found" error for an unknown NORAD ID (Celestrak 404s)', async () => {
+    // Celestrak responds 404 (not 200-with-empty-body) when a query matches
+    // nothing, so this must surface the same "No TLE found" error as an
+    // ordinary empty match, not a generic request-failed error.
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 404 }))
+    await expect(fetchByNoradId('99999999')).rejects.toThrow('No TLE found for NORAD ID 99999999')
+  })
+
+  it('fetchByNoradId throws on a genuine non-ok response', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response('', { status: 500 }))
     await expect(fetchByNoradId('25544')).rejects.toThrow()
   })
@@ -172,6 +180,11 @@ describe('celestrakProvider', () => {
     const records = await searchByName('   ')
     expect(records).toEqual([])
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('searchByName returns an empty array (not a throw) when Celestrak 404s for zero matches', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 404 }))
+    await expect(searchByName('nonexistent-satellite-xyz')).resolves.toEqual([])
   })
 
   it('searchByName caches per-query, independent of other queries', async () => {

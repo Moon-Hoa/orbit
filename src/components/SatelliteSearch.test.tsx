@@ -48,6 +48,33 @@ describe('SatelliteSearch', () => {
     expect(onSelect).toHaveBeenCalledWith(ISS_TLE)
   })
 
+  it('does not render companion buttons when onAddCompanion is omitted', async () => {
+    searchByNameMock.mockResolvedValue([ISS_TLE])
+    render(<SatelliteSearch selectedTle={null} onSelect={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'iss' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+    await screen.findByRole('button', { name: /ISS \(ZARYA\)/ })
+    expect(screen.queryByLabelText(/Add .* as companion/)).not.toBeInTheDocument()
+  })
+
+  it('calls onAddCompanion with the TLE, without also calling onSelect', async () => {
+    searchByNameMock.mockResolvedValue([ISS_TLE])
+    const onSelect = vi.fn()
+    const onAddCompanion = vi.fn()
+    render(<SatelliteSearch selectedTle={null} onSelect={onSelect} onAddCompanion={onAddCompanion} />)
+
+    fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'iss' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+    const addButton = await screen.findByLabelText('Add ISS (ZARYA) as companion')
+    fireEvent.click(addButton)
+
+    expect(onAddCompanion).toHaveBeenCalledWith(ISS_TLE)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('shows a message when no results are found', async () => {
     searchByNameMock.mockResolvedValue([])
     render(<SatelliteSearch selectedTle={null} onSelect={vi.fn()} />)

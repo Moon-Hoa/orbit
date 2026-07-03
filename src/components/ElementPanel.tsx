@@ -1,4 +1,5 @@
 import { EARTH_RADIUS_KM, type OrbitalElements } from '../engine'
+import type { Preset } from '../scenario'
 import { degToRad, radToDeg } from './angleUnits'
 import { ElementSlider } from './ElementSlider'
 import { PresetSelector } from './PresetSelector'
@@ -7,17 +8,18 @@ interface ElementPanelProps {
   elements: OrbitalElements
   onChange: (elements: OrbitalElements) => void
   onSelectPreset: (elements: OrbitalElements) => void
+  onAddCompanion?: (preset: Preset) => void
 }
 
 /** Sliders + numeric inputs for the six classical orbital elements, live-synced to engine state. */
-export function ElementPanel({ elements, onChange, onSelectPreset }: ElementPanelProps) {
+export function ElementPanel({ elements, onChange, onSelectPreset, onAddCompanion }: ElementPanelProps) {
   const perigeeAltitudeKm =
     elements.semiMajorAxisKm * (1 - elements.eccentricity) - EARTH_RADIUS_KM
 
   return (
     <div className="absolute top-4 left-4 flex w-72 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 backdrop-blur">
       <h2 className="mb-1 text-sm font-semibold text-slate-100">Orbital elements</h2>
-      <PresetSelector onSelect={onSelectPreset} />
+      <PresetSelector onSelect={onSelectPreset} onAddCompanion={onAddCompanion} />
 
       <ElementSlider
         label="a"

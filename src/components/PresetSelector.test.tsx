@@ -20,4 +20,21 @@ describe('PresetSelector', () => {
     const molniya = PRESETS.find((p) => p.id === 'molniya')
     expect(onSelect).toHaveBeenCalledWith(molniya?.elements)
   })
+
+  it('does not render companion buttons when onAddCompanion is omitted', () => {
+    render(<PresetSelector onSelect={vi.fn()} />)
+    expect(screen.queryByLabelText(/Add .* as companion/)).not.toBeInTheDocument()
+  })
+
+  it('calls onAddCompanion with the whole preset, without also calling onSelect', () => {
+    const onSelect = vi.fn()
+    const onAddCompanion = vi.fn()
+    render(<PresetSelector onSelect={onSelect} onAddCompanion={onAddCompanion} />)
+
+    fireEvent.click(screen.getByLabelText('Add Molniya as companion'))
+
+    const molniya = PRESETS.find((p) => p.id === 'molniya')
+    expect(onAddCompanion).toHaveBeenCalledWith(molniya)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })
