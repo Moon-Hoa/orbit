@@ -21,6 +21,7 @@ import { type GroundStationSelection, OrbitScene, PRIMARY_OBJECT_ID } from '../t
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { AccessibleDataView } from './AccessibleDataView'
+import { AllSatellitesToggle } from './AllSatellitesToggle'
 import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
 import { ExportControls } from './ExportControls'
@@ -431,6 +432,10 @@ export function OrbitViewer() {
     })
   }
 
+  function setSatelliteSwarmVisible(visible: boolean): Promise<void> {
+    return sceneRef.current?.setSatelliteSwarmVisible(visible) ?? Promise.resolve()
+  }
+
   function useGroundStationForPassPrediction() {
     if (!groundStationSelection) return
     setPassPredictionRequest((prev) => ({
@@ -515,6 +520,7 @@ export function OrbitViewer() {
             }}
           />
           <ShareButton getShareUrl={getShareUrl} />
+          <AllSatellitesToggle onToggle={setSatelliteSwarmVisible} />
           <GroundStationLayerPanel
             visibleCategoryIds={visibleGroundStationCategories}
             onToggleCategory={toggleGroundStationCategory}

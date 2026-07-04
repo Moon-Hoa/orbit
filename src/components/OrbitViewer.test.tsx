@@ -20,6 +20,7 @@ const setFocusedObjectMock = vi.fn()
 const syncToNowMock = vi.fn()
 const setPlaybackCapMock = vi.fn()
 const setGroundStationCategoryVisibleMock = vi.fn()
+const setSatelliteSwarmVisibleMock = vi.fn()
 
 let capturedOptions: OrbitSceneOptions | null = null
 
@@ -51,6 +52,7 @@ vi.mock('../three/OrbitScene', async (importOriginal) => {
         syncToNow: syncToNowMock,
         setPlaybackCap: setPlaybackCapMock,
         setGroundStationCategoryVisible: setGroundStationCategoryVisibleMock,
+        setSatelliteSwarmVisible: setSatelliteSwarmVisibleMock,
       })
     }),
   }
@@ -782,5 +784,55 @@ describe('OrbitViewer ground stations', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Observer latitude')).toHaveValue(78.2298))
     expect(screen.getByLabelText('Observer longitude')).toHaveValue(15.4078)
+  })
+})
+
+describe('OrbitViewer all satellites', () => {
+  it('calls scene.setSatelliteSwarmVisible(true) when the toggle is clicked on', async () => {
+    setSatelliteSwarmVisibleMock.mockResolvedValue(undefined)
+    render(<OrbitViewer />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'All satellites' }))
+    })
+
+    expect(setSatelliteSwarmVisibleMock).toHaveBeenCalledWith(true)
+    expect(screen.getByRole('button', { name: 'All satellites' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('calls scene.setSatelliteSwarmVisible(false) when toggled back off', async () => {
+    setSatelliteSwarmVisibleMock.mockResolvedValue(undefined)
+    render(<OrbitViewer />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'All satellites' }))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'All satellites' }))
+    })
+
+    expect(setSatelliteSwarmVisibleMock).toHaveBeenLastCalledWith(false)
+    expect(screen.getByRole('button', { name: 'All satellites' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  it('shows an error and stays off if the scene rejects (e.g. the Celestrak fetch failed)', async () => {
+    setSatelliteSwarmVisibleMock.mockRejectedValue(new Error('fetch failed'))
+    render(<OrbitViewer />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'All satellites' }))
+    })
+
+    expect(screen.getByText('Could not load satellite data - try again.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'All satellites' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 })

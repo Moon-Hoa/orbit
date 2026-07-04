@@ -142,7 +142,19 @@ export function parseTleBlocks(text: string): TleBlockParseResult {
   return { records, errors }
 }
 
-function readCache<T>(key: string): T | null {
+/** Reads a cache entry regardless of age - for callers with their own staleness policy (e.g. falling back to stale data when a live refetch fails). Returns null if there's no entry at all, or it's unparseable. */
+export function readCacheIgnoringTtl<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const { data } = JSON.parse(raw) as { data: T; fetchedAt: number }
+    return data
+  } catch {
+    return null
+  }
+}
+
+export function readCache<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key)
     if (!raw) return null
@@ -154,7 +166,7 @@ function readCache<T>(key: string): T | null {
   }
 }
 
-function writeCache<T>(key: string, data: T): void {
+export function writeCache<T>(key: string, data: T): void {
   try {
     localStorage.setItem(key, JSON.stringify({ data, fetchedAt: Date.now() }))
   } catch {

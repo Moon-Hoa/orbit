@@ -10,7 +10,7 @@ import {
   scale,
 } from '../engine'
 import { GROUND_STATION_CATEGORIES, type GroundStation } from '../groundStations'
-import { type TleRecord, shadowFractionAt, solarSubpointAt } from '../satellite'
+import { type TleRecord, fetchActiveSatellites, shadowFractionAt, solarSubpointAt } from '../satellite'
 import { type ClosestApproachResult, findClosestApproach } from './closestApproach'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
 import { eciToScene } from './coordinates'
@@ -22,6 +22,7 @@ import { DesignOrbitSource } from './DesignOrbitSource'
 import { disposeObject3D } from './disposeObject3D'
 import type { OrbitSource } from './OrbitSource'
 import { RealSatelliteSource } from './RealSatelliteSource'
+import { SatelliteSwarm } from './SatelliteSwarm'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -147,6 +148,9 @@ export class OrbitScene {
   private readonly raycaster = new THREE.Raycaster()
   private readonly groundStationCategories = new Map<string, GroundStationCategoryState>()
   private pointerDownPosition: { x: number; y: number } | null = null
+  private satelliteSwarm: SatelliteSwarm | null = null
+  private satelliteSwarmVisible = false
+  private satelliteSwarmLoadPromise: Promise<void> | null = null
 
   private readonly objects = new Map<string, TrackedObject>()
   private focusedObjectId: string = PRIMARY_OBJECT_ID
@@ -463,6 +467,42 @@ export class OrbitScene {
     if (visible) this.updateGroundStationPins()
   }
 
+  /**
+   * Shows or hides the "all satellites currently in orbit" background swarm - a single
+   * `THREE.Points` cloud (see `SatelliteSwarm`), not individually trackable like the companion
+   * system above. The first time this is enabled, it fetches and parses the full active-satellite
+   * catalog (~16,000 objects as of writing) - callers should show their own loading UI while the
+   * returned promise is pending. Rejects (leaving the swarm hidden) if that fetch fails and
+   * nothing is cached yet; a later retry (calling this again) will attempt the fetch again.
+   */
+  async setSatelliteSwarmVisible(visible: boolean): Promise<void> {
+    this.satelliteSwarmVisible = visible
+    if (!visible) {
+      this.satelliteSwarm?.setVisible(false)
+      return
+    }
+    if (this.satelliteSwarm) {
+      this.satelliteSwarm.setVisible(true)
+      return
+    }
+    if (!this.satelliteSwarmLoadPromise) {
+      this.satelliteSwarmLoadPromise = this.loadSatelliteSwarm().catch((error: unknown) => {
+        this.satelliteSwarmLoadPromise = null
+        throw error
+      })
+    }
+    await this.satelliteSwarmLoadPromise
+  }
+
+  private async loadSatelliteSwarm(): Promise<void> {
+    const tles = await fetchActiveSatellites()
+    const currentDate = new Date(this.referenceDate.getTime() + this.simTimeSeconds * 1000)
+    const swarm = new SatelliteSwarm(tles, currentDate)
+    this.satelliteSwarm = swarm
+    this.scene.add(swarm.points)
+    swarm.setVisible(this.satelliteSwarmVisible)
+  }
+
   /** Normalized device coordinates (-1..1) for a pointer event, relative to the canvas. */
   private pointerToNdc(event: PointerEvent): THREE.Vector2 {
     const rect = this.renderer.domElement.getBoundingClientRect()
@@ -512,6 +552,7 @@ export class OrbitScene {
   private syncToCurrentState(forceGroundTrack: boolean): void {
     const currentDate = new Date(this.referenceDate.getTime() + this.simTimeSeconds * 1000)
     this.sun.position.copy(this.sunDirectionInScene(currentDate))
+    if (this.satelliteSwarmVisible) this.satelliteSwarm?.update(currentDate)
 
     let focusedAltitudeKm: number | null = null
     let focusedSpeedKmS: number | null = null
@@ -623,6 +664,9 @@ export class OrbitScene {
     this.controls.dispose()
     this.renderer.dispose()
     this.container.removeChild(this.renderer.domElement)
+    // THREE.Points (the satellite swarm) isn't a Mesh, so disposeObject3D's traversal below
+    // doesn't reach its geometry/material - dispose it explicitly first (safe to double-dispose).
+    this.satelliteSwarm?.dispose()
     disposeObject3D(this.scene)
   }
 }

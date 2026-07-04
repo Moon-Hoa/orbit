@@ -1,3 +1,4 @@
+export * from './activeSatellitesProvider'
 export * from './celestrakProvider'
 export * from './passPrediction'
 export * from './sgp4'
