@@ -8,7 +8,9 @@ import {
   ecefToEci,
   geodeticToEcefDirection,
   magnitude,
+  scale,
 } from '../engine'
+import { GROUND_STATION_CATEGORIES, type GroundStation } from '../groundStations'
 import { type TleRecord, shadowFractionAt, solarSubpointAt } from '../satellite'
 import { type ClosestApproachResult, findClosestApproach } from './closestApproach'
 import { EARTH_RADIUS_SCENE_UNITS } from './constants'
@@ -16,10 +18,13 @@ import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
 import { DEFAULT_ORBIT_PATH_COLOR, createOrbitPath } from './createOrbitPath'
 import { DEFAULT_MARKER_COLOR, createSatelliteMarker } from './createSatelliteMarker'
+import { createGroundStationPin, createGroundStationPinMaterial } from './createGroundStationPin'
 import { DesignOrbitSource } from './DesignOrbitSource'
 import { disposeObject3D } from './disposeObject3D'
 import type { OrbitSource } from './OrbitSource'
 import { RealSatelliteSource } from './RealSatelliteSource'
+
+const DEG_TO_RAD = Math.PI / 180
 
 /** The id of the always-present, fully-editable object driven by setDesignElements/setRealSatellite. */
 export const PRIMARY_OBJECT_ID = 'primary'
@@ -58,6 +63,13 @@ export interface GroundTrackForObject {
   points: GeodeticCoordinates[]
 }
 
+/** A ground station pin the user clicked, alongside which category it belongs to. */
+export interface GroundStationSelection {
+  station: GroundStation
+  categoryId: string
+  categoryLabel: string
+}
+
 /** How often (wall-clock ms) ground tracks are recomputed and reported. */
 const GROUND_TRACK_REPORT_INTERVAL_MS = 200
 /** How many trailing orbital periods the ground track window covers. */
@@ -78,6 +90,8 @@ export interface OrbitSceneOptions {
   onClosestApproachUpdate?: (result: ClosestApproachResult | null) => void
   /** Called when scene-driven playback (see `setPlaybackCap`) stops itself on reaching its cap, so the UI can mirror the paused state. */
   onAutoPause?: () => void
+  /** Called when the user clicks a visible ground station pin. */
+  onGroundStationSelect?: (selection: GroundStationSelection) => void
 }
 
 interface TrackedObject {
@@ -87,6 +101,19 @@ interface TrackedObject {
   pathColor: number
   markerColor: number
 }
+
+interface GroundStationCategoryState {
+  categoryId: string
+  categoryLabel: string
+  stationsById: Map<string, GroundStation>
+  material: THREE.MeshBasicMaterial
+  group: THREE.Group
+  pinsByStationId: Map<string, THREE.Mesh>
+  visible: boolean
+}
+
+/** How far the pointer can move between down/up and still count as a click (not a camera drag), in CSS pixels. */
+const CLICK_MOVEMENT_THRESHOLD_PX = 5
 
 /**
  * Owns the Three.js scene, camera, renderer, controls, and render loop.
@@ -116,7 +143,11 @@ export class OrbitScene {
   private readonly onSolarUpdate?: (subsolarPoint: GeodeticCoordinates | null) => void
   private readonly onClosestApproachUpdate?: (result: ClosestApproachResult | null) => void
   private readonly onAutoPause?: () => void
+  private readonly onGroundStationSelect?: (selection: GroundStationSelection) => void
   private readonly sun: THREE.DirectionalLight
+  private readonly raycaster = new THREE.Raycaster()
+  private readonly groundStationCategories = new Map<string, GroundStationCategoryState>()
+  private pointerDownPosition: { x: number; y: number } | null = null
 
   private readonly objects = new Map<string, TrackedObject>()
   private focusedObjectId: string = PRIMARY_OBJECT_ID
@@ -138,6 +169,7 @@ export class OrbitScene {
     this.onSolarUpdate = options.onSolarUpdate
     this.onClosestApproachUpdate = options.onClosestApproachUpdate
     this.onAutoPause = options.onAutoPause
+    this.onGroundStationSelect = options.onGroundStationSelect
     this.scene = new THREE.Scene()
 
     this.camera = new THREE.PerspectiveCamera(50, this.aspectRatio, 0.1, 1000)
@@ -174,6 +206,36 @@ export class OrbitScene {
     this.scene.add(this.sun)
 
     this.scene.add(createEarth())
+
+    for (const category of GROUND_STATION_CATEGORIES) {
+      const material = createGroundStationPinMaterial(category.color)
+      const group = new THREE.Group()
+      group.name = `ground-stations-${category.id}`
+      group.visible = false
+
+      const stationsById = new Map<string, GroundStation>()
+      const pinsByStationId = new Map<string, THREE.Mesh>()
+      for (const station of category.stations) {
+        const pin = createGroundStationPin(material)
+        group.add(pin)
+        stationsById.set(station.id, station)
+        pinsByStationId.set(station.id, pin)
+      }
+      this.scene.add(group)
+
+      this.groundStationCategories.set(category.id, {
+        categoryId: category.id,
+        categoryLabel: category.label,
+        stationsById,
+        material,
+        group,
+        pinsByStationId,
+        visible: false,
+      })
+    }
+
+    this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown)
+    this.renderer.domElement.addEventListener('pointerup', this.handlePointerUp)
 
     this.objects.set(
       PRIMARY_OBJECT_ID,
@@ -357,10 +419,89 @@ export class OrbitScene {
     return eciToScene(ecefToEci(subsolarEcefDirection, this.simTimeSeconds))
   }
 
+  /**
+   * Ground stations are fixed on the real Earth's surface (geodetic/ECEF),
+   * so - same reasoning as `sunDirectionInScene` - their scene position has
+   * to be rotated into the static globe mesh's frame and re-computed as sim
+   * time advances, or pins drift out of registration with the surface
+   * texture instead of staying "planted" on it.
+   */
+  private updateGroundStationPins(): void {
+    for (const state of this.groundStationCategories.values()) {
+      if (!state.visible) continue
+      for (const [stationId, station] of state.stationsById) {
+        const pin = state.pinsByStationId.get(stationId)
+        if (!pin) continue
+        const ecefDirection = geodeticToEcefDirection({
+          latitudeRad: station.latitudeDeg * DEG_TO_RAD,
+          longitudeRad: station.longitudeDeg * DEG_TO_RAD,
+          altitudeKm: 0,
+        })
+        const ecefPositionKm = scale(ecefDirection, EARTH_RADIUS_KM)
+        pin.position.copy(eciToScene(ecefToEci(ecefPositionKm, this.simTimeSeconds)))
+      }
+    }
+  }
+
+  /** Shows or hides every pin in a ground station category. No-ops for an unknown category id. */
+  setGroundStationCategoryVisible(categoryId: string, visible: boolean): void {
+    const state = this.groundStationCategories.get(categoryId)
+    if (!state) return
+    state.visible = visible
+    state.group.visible = visible
+    if (visible) this.updateGroundStationPins()
+  }
+
+  /** Normalized device coordinates (-1..1) for a pointer event, relative to the canvas. */
+  private pointerToNdc(event: PointerEvent): THREE.Vector2 {
+    const rect = this.renderer.domElement.getBoundingClientRect()
+    return new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    )
+  }
+
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    this.pointerDownPosition = { x: event.clientX, y: event.clientY }
+  }
+
+  private readonly handlePointerUp = (event: PointerEvent): void => {
+    const down = this.pointerDownPosition
+    this.pointerDownPosition = null
+    if (!down) return
+    const movedPx = Math.hypot(event.clientX - down.x, event.clientY - down.y)
+    if (movedPx > CLICK_MOVEMENT_THRESHOLD_PX) return // was a camera drag, not a click
+
+    const visiblePins: THREE.Mesh[] = []
+    for (const state of this.groundStationCategories.values()) {
+      if (state.visible) visiblePins.push(...state.pinsByStationId.values())
+    }
+    if (visiblePins.length === 0) return
+
+    this.raycaster.setFromCamera(this.pointerToNdc(event), this.camera)
+    const [hit] = this.raycaster.intersectObjects(visiblePins, false)
+    if (!hit) return
+
+    for (const state of this.groundStationCategories.values()) {
+      for (const [stationId, pin] of state.pinsByStationId) {
+        if (pin !== hit.object) continue
+        const station = state.stationsById.get(stationId)
+        if (!station) return
+        this.onGroundStationSelect?.({
+          station,
+          categoryId: state.categoryId,
+          categoryLabel: state.categoryLabel,
+        })
+        return
+      }
+    }
+  }
+
   /** Repositions every tracked object at the current sim time, and reports focused-object stats/ground tracks. */
   private syncToCurrentState(forceGroundTrack: boolean): void {
     const currentDate = new Date(this.referenceDate.getTime() + this.simTimeSeconds * 1000)
     this.sun.position.copy(this.sunDirectionInScene(currentDate))
+    this.updateGroundStationPins()
 
     let focusedAltitudeKm: number | null = null
     let focusedSpeedKmS: number | null = null
@@ -466,6 +607,8 @@ export class OrbitScene {
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId)
     }
+    this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown)
+    this.renderer.domElement.removeEventListener('pointerup', this.handlePointerUp)
     this.resizeObserver.disconnect()
     this.controls.dispose()
     this.renderer.dispose()

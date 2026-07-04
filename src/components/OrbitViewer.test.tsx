@@ -19,6 +19,7 @@ const removeObjectMock = vi.fn()
 const setFocusedObjectMock = vi.fn()
 const syncToNowMock = vi.fn()
 const setPlaybackCapMock = vi.fn()
+const setGroundStationCategoryVisibleMock = vi.fn()
 
 let capturedOptions: OrbitSceneOptions | null = null
 
@@ -49,6 +50,7 @@ vi.mock('../three/OrbitScene', async (importOriginal) => {
         setFocusedObject: setFocusedObjectMock,
         syncToNow: syncToNowMock,
         setPlaybackCap: setPlaybackCapMock,
+        setGroundStationCategoryVisible: setGroundStationCategoryVisibleMock,
       })
     }),
   }
@@ -617,5 +619,52 @@ describe('OrbitViewer companions', () => {
     fireEvent.change(screen.getByLabelText('a value'), { target: { value: '7500' } })
 
     expect(screen.queryByText('1436.1 min')).not.toBeInTheDocument()
+  })
+})
+
+describe('OrbitViewer ground stations', () => {
+  it('toggles a ground station category through to scene.setGroundStationCategoryVisible', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ground stations' }))
+
+    fireEvent.click(screen.getByLabelText(/ESA Estrack/))
+
+    expect(setGroundStationCategoryVisibleMock).toHaveBeenCalledWith('estrack', true)
+  })
+
+  it('does not show a "use for pass prediction" button in design mode', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ground stations' }))
+
+    act(() => {
+      capturedOptions?.onGroundStationSelect?.({
+        station: { id: 'ksat-svalbard', name: 'Svalbard (SvalSat)', latitudeDeg: 78.2298, longitudeDeg: 15.4078 },
+        categoryId: 'ksat',
+        categoryLabel: 'KSAT',
+      })
+    })
+
+    expect(screen.getByText('Svalbard (SvalSat)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Use for pass prediction' })).not.toBeInTheDocument()
+  })
+
+  it('feeds a selected ground station into GroundStationPanel once "Use for pass prediction" is clicked, in track-real mode', async () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ground stations' }))
+    act(() => {
+      capturedOptions?.onGroundStationSelect?.({
+        station: { id: 'ksat-svalbard', name: 'Svalbard (SvalSat)', latitudeDeg: 78.2298, longitudeDeg: 15.4078 },
+        categoryId: 'ksat',
+        categoryLabel: 'KSAT',
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use for pass prediction' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Observer latitude')).toHaveValue(78.2298))
+    expect(screen.getByLabelText('Observer longitude')).toHaveValue(15.4078)
   })
 })

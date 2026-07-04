@@ -16,7 +16,7 @@ import {
   nextCompanionColor,
 } from './companions'
 import type { ClosestApproachResult } from '../three/closestApproach'
-import { OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
+import { type GroundStationSelection, OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { AccessibleDataView } from './AccessibleDataView'
@@ -24,6 +24,7 @@ import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
 import { ExportControls } from './ExportControls'
 import { formatElapsed } from './formatElapsed'
+import { GroundStationLayerPanel } from './GroundStationLayerPanel'
 import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView, type GroundTrack } from './GroundTrackView'
 import { HohmannPlanner } from './HohmannPlanner'
@@ -106,6 +107,16 @@ export function OrbitViewer() {
   const [enableJ2, setEnableJ2] = useState(false)
   const [isDataViewOpen, setIsDataViewOpen] = useState(false)
   const [announcement, setAnnouncement] = useState('')
+  const [visibleGroundStationCategories, setVisibleGroundStationCategories] = useState(
+    () => new Set<string>(),
+  )
+  const [groundStationSelection, setGroundStationSelection] =
+    useState<GroundStationSelection | null>(null)
+  const [passPredictionRequest, setPassPredictionRequest] = useState<{
+    latitudeDeg: number
+    longitudeDeg: number
+    nonce: number
+  } | null>(null)
 
   /** Posts a message to the visually-hidden aria-live region, for screen readers. */
   function announce(message: string) {
@@ -226,6 +237,7 @@ export function OrbitViewer() {
       onSolarUpdate: setSubsolarPoint,
       onClosestApproachUpdate: setClosestApproach,
       onAutoPause: () => setIsPlaying(false),
+      onGroundStationSelect: setGroundStationSelection,
     })
     sceneRef.current = scene
     scene.start()
@@ -361,6 +373,25 @@ export function OrbitViewer() {
     setIsPlaying(true)
   }
 
+  function toggleGroundStationCategory(categoryId: string, visible: boolean) {
+    sceneRef.current?.setGroundStationCategoryVisible(categoryId, visible)
+    setVisibleGroundStationCategories((prev) => {
+      const next = new Set(prev)
+      if (visible) next.add(categoryId)
+      else next.delete(categoryId)
+      return next
+    })
+  }
+
+  function useGroundStationForPassPrediction() {
+    if (!groundStationSelection) return
+    setPassPredictionRequest((prev) => ({
+      latitudeDeg: groundStationSelection.station.latitudeDeg,
+      longitudeDeg: groundStationSelection.station.longitudeDeg,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }))
+  }
+
   return (
     <div className="relative h-screen w-screen bg-black">
       <div ref={containerRef} className="absolute inset-0" />
@@ -421,7 +452,7 @@ export function OrbitViewer() {
         />
         {companions.length === 1 && <ClosestApproachPanel result={closestApproach} />}
       </div>
-      {isTrackingReal && <GroundStationPanel tle={selectedTle} />}
+      {isTrackingReal && <GroundStationPanel tle={selectedTle} presetLocation={passPredictionRequest} />}
       {mode === 'design' && <HohmannPlanner />}
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
         <div className="flex gap-2">
@@ -434,6 +465,12 @@ export function OrbitViewer() {
             }}
           />
           <ShareButton getShareUrl={getShareUrl} />
+          <GroundStationLayerPanel
+            visibleCategoryIds={visibleGroundStationCategories}
+            onToggleCategory={toggleGroundStationCategory}
+            selection={groundStationSelection}
+            onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
+          />
           <SettingsPanel unitSystem={unitSystem} onUnitSystemChange={setUnitSystem} />
         </div>
         <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />

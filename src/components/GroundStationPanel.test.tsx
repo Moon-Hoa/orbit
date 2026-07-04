@@ -147,4 +147,37 @@ describe('GroundStationPanel', () => {
 
     expect(screen.getByText(/Geolocation isn't available/)).toBeInTheDocument()
   })
+
+  it('applies a presetLocation (e.g. from clicking a ground station pin)', async () => {
+    render(
+      <GroundStationPanel
+        tle={ISS_TLE}
+        presetLocation={{ latitudeDeg: 78.2298, longitudeDeg: 15.4078, nonce: 1 }}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByLabelText('Observer latitude')).toHaveValue(78.2298))
+    expect(screen.getByLabelText('Observer longitude')).toHaveValue(15.4078)
+  })
+
+  it('re-applies presetLocation when the nonce changes, even to the same coordinates', async () => {
+    const { rerender } = render(
+      <GroundStationPanel
+        tle={ISS_TLE}
+        presetLocation={{ latitudeDeg: 78.2298, longitudeDeg: 15.4078, nonce: 1 }}
+      />,
+    )
+    await waitFor(() => expect(screen.getByLabelText('Observer latitude')).toHaveValue(78.2298))
+
+    fireEvent.change(screen.getByLabelText('Observer latitude'), { target: { value: '0' } })
+    expect(screen.getByLabelText('Observer latitude')).toHaveValue(0)
+
+    rerender(
+      <GroundStationPanel
+        tle={ISS_TLE}
+        presetLocation={{ latitudeDeg: 78.2298, longitudeDeg: 15.4078, nonce: 2 }}
+      />,
+    )
+    await waitFor(() => expect(screen.getByLabelText('Observer latitude')).toHaveValue(78.2298))
+  })
 })

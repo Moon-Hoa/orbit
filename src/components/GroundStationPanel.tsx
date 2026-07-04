@@ -37,15 +37,31 @@ type GeolocationStatus = 'idle' | 'loading' | 'denied' | 'unavailable'
 
 interface GroundStationPanelProps {
   tle: TleRecord
+  /**
+   * Set (with a fresh `nonce`) to override the observer location - e.g. from
+   * clicking a ground station pin. `nonce` must change even if the
+   * coordinates don't, so re-selecting the same station still re-applies it.
+   */
+  presetLocation?: { latitudeDeg: number; longitudeDeg: number; nonce: number } | null
 }
 
 /** Next-pass (AOS/LOS/max elevation) predictions for a ground observer, track-real mode only. */
-export function GroundStationPanel({ tle }: GroundStationPanelProps) {
+export function GroundStationPanel({ tle, presetLocation }: GroundStationPanelProps) {
   const [location, setLocation] = useState(loadStoredLocation)
   const [geolocationStatus, setGeolocationStatus] = useState<GeolocationStatus>('idle')
   const [passes, setPasses] = useState<SatellitePass[] | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!presetLocation) return
+    setLocation({
+      latitudeDeg: presetLocation.latitudeDeg.toFixed(4),
+      longitudeDeg: presetLocation.longitudeDeg.toFixed(4),
+      altitudeM: '0',
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetLocation?.nonce])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(location))
