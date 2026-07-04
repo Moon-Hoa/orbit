@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchByNoradId, parseTleBlock, parseTleText, searchByName } from './celestrakProvider'
+import {
+  fetchByNoradId,
+  parseTleBlock,
+  parseTleBlocks,
+  parseTleText,
+  searchByName,
+} from './celestrakProvider'
 
 const ISS_NAME = 'ISS (ZARYA)'
 const ISS_LINE1 = '1 25544U 98067A   26182.50817465  .00006185  00000+0  11827-3 0  9996'
@@ -97,6 +103,58 @@ describe('parseTleBlock', () => {
     const corruptedLine1 = `${ISS_LINE1.slice(0, -1)}${ISS_LINE1.at(-1) === '0' ? '1' : '0'}`
     const result = parseTleBlock(`${corruptedLine1}\n${ISS_LINE2}`)
     expect(result).toEqual({ ok: false, error: 'Line 1 fails its checksum - check for typos.' })
+  })
+})
+
+describe('parseTleBlocks', () => {
+  it('parses multiple 3-line records', () => {
+    const result = parseTleBlocks(MULTI_RECORD_TEXT)
+    expect(result.errors).toEqual([])
+    expect(result.records).toHaveLength(2)
+    expect(result.records[0]).toEqual({
+      name: ISS_NAME.trim(),
+      noradId: '25544',
+      line1: ISS_LINE1,
+      line2: ISS_LINE2,
+    })
+    expect(result.records[1].noradId).toBe('49044')
+  })
+
+  it('parses a single bare 2-line record (no name)', () => {
+    const result = parseTleBlocks(`${ISS_LINE1}\n${ISS_LINE2}`)
+    expect(result.errors).toEqual([])
+    expect(result.records).toEqual([
+      { name: 'Satellite 25544', noradId: '25544', line1: ISS_LINE1, line2: ISS_LINE2 },
+    ])
+  })
+
+  it('parses a mix of named and bare records back-to-back', () => {
+    const text = [ISS_NAME, ISS_LINE1, ISS_LINE2, ISS_LINE1, ISS_LINE2].join('\n')
+    const result = parseTleBlocks(text)
+    expect(result.errors).toEqual([])
+    expect(result.records).toHaveLength(2)
+    expect(result.records[0].name).toBe(ISS_NAME)
+    expect(result.records[1].name).toBe('Satellite 25544')
+  })
+
+  it('reports a per-record error and continues parsing the rest', () => {
+    const badLine1 = `2${ISS_LINE1.slice(1)}`
+    const text = [ISS_NAME, badLine1, ISS_LINE2, 'ISS (NAUKA)', ISS_LINE1, ISS_LINE2].join('\n')
+    const result = parseTleBlocks(text)
+
+    expect(result.records).toHaveLength(1)
+    expect(result.records[0].name).toBe('ISS (NAUKA)')
+    expect(result.errors).toEqual([`${ISS_NAME}: Line 1 must start with "1 ".`])
+  })
+
+  it('reports an incomplete trailing record', () => {
+    const result = parseTleBlocks(`${ISS_NAME}\n${ISS_LINE1}`)
+    expect(result.records).toEqual([])
+    expect(result.errors).toEqual(['Incomplete record near line 1: expected 3 lines, got 2.'])
+  })
+
+  it('returns no records or errors for blank input', () => {
+    expect(parseTleBlocks('')).toEqual({ records: [], errors: [] })
   })
 })
 

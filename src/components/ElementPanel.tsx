@@ -1,6 +1,7 @@
 import { EARTH_RADIUS_KM, type OrbitalElements } from '../engine'
 import type { Preset } from '../scenario'
 import { degToRad, radToDeg } from './angleUnits'
+import type { BulkAddSummary } from './companions'
 import { ElementSlider } from './ElementSlider'
 import { PresetSelector } from './PresetSelector'
 
@@ -9,6 +10,7 @@ interface ElementPanelProps {
   onChange: (elements: OrbitalElements) => void
   onSelectPreset: (elements: OrbitalElements, label: string) => void
   onAddCompanion?: (preset: Preset) => void
+  onAddCompanionMany?: (presets: Preset[]) => BulkAddSummary
   enableJ2: boolean
   onEnableJ2Change: (enableJ2: boolean) => void
 }
@@ -19,6 +21,7 @@ export function ElementPanel({
   onChange,
   onSelectPreset,
   onAddCompanion,
+  onAddCompanionMany,
   enableJ2,
   onEnableJ2Change,
 }: ElementPanelProps) {
@@ -28,7 +31,11 @@ export function ElementPanel({
   return (
     <div className="absolute top-4 left-4 flex w-72 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 backdrop-blur">
       <h2 className="mb-1 text-sm font-semibold text-slate-100">Orbital elements</h2>
-      <PresetSelector onSelect={onSelectPreset} onAddCompanion={onAddCompanion} />
+      <PresetSelector
+        onSelect={onSelectPreset}
+        onAddCompanion={onAddCompanion}
+        onAddCompanionMany={onAddCompanionMany}
+      />
 
       <ElementSlider
         label="a"

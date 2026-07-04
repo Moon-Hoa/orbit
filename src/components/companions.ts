@@ -16,6 +16,13 @@ export interface CompanionEntry {
   source: CompanionSource
 }
 
+/** What happened when a batch of companions was requested at once, for a summary message. */
+export interface BulkAddSummary {
+  addedCount: number
+  /** Already tracked, or the companion limit (MAX_COMPANIONS) was reached. */
+  skippedCount: number
+}
+
 /** The primary object's path/marker colors, matching its actual 3D rendering (blue path, white marker). */
 export const DEFAULT_PRIMARY_COLOR = DEFAULT_ORBIT_PATH_COLOR
 export const DEFAULT_PRIMARY_MARKER_COLOR = DEFAULT_MARKER_COLOR

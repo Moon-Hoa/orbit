@@ -9,6 +9,7 @@ import {
   orbitalPeriodSecondsFromTle,
 } from '../satellite'
 import {
+  type BulkAddSummary,
   type CompanionEntry,
   DEFAULT_PRIMARY_COLOR,
   DEFAULT_PRIMARY_MARKER_COLOR,
@@ -352,6 +353,53 @@ export function OrbitViewer() {
     ])
   }
 
+  /** Adds several real satellites as companions in one action, skipping ones already tracked and stopping once MAX_COMPANIONS is reached. */
+  function addRealSatelliteCompanionsMany(tles: TleRecord[]): BulkAddSummary {
+    const seenNoradIds = new Set<string>()
+    const candidates = tles.filter((tle) => {
+      if (companions.some((c) => c.id === `real:${tle.noradId}`)) return false
+      if (seenNoradIds.has(tle.noradId)) return false
+      seenNoradIds.add(tle.noradId)
+      return true
+    })
+    const fitting = candidates.slice(0, Math.max(0, MAX_COMPANIONS - companions.length))
+
+    const newEntries: CompanionEntry[] = fitting.map((tle, i) => {
+      const color = nextCompanionColor(companions.length + i)
+      sceneRef.current?.addRealSatelliteCompanion(`real:${tle.noradId}`, tle, color)
+      return { id: `real:${tle.noradId}`, label: tle.name, color, source: { type: 'real', tle } }
+    })
+    if (newEntries.length > 0) setCompanions((prev) => [...prev, ...newEntries])
+
+    return { addedCount: fitting.length, skippedCount: tles.length - fitting.length }
+  }
+
+  /** Adds several design-orbit presets as companions in one action, skipping ones already tracked and stopping once MAX_COMPANIONS is reached. */
+  function addDesignCompanionsMany(presets: Preset[]): BulkAddSummary {
+    const seenIds = new Set<string>()
+    const candidates = presets.filter((preset) => {
+      if (companions.some((c) => c.id === `design:${preset.id}`)) return false
+      if (seenIds.has(preset.id)) return false
+      seenIds.add(preset.id)
+      return true
+    })
+    const fitting = candidates.slice(0, Math.max(0, MAX_COMPANIONS - companions.length))
+
+    const newEntries: CompanionEntry[] = fitting.map((preset, i) => {
+      const color = nextCompanionColor(companions.length + i)
+      sceneRef.current?.addDesignCompanion(`design:${preset.id}`, preset.elements, color)
+      return {
+        id: `design:${preset.id}`,
+        label: preset.label,
+        color,
+        source: { type: 'design', elements: preset.elements },
+      }
+    })
+    if (newEntries.length > 0) setCompanions((prev) => [...prev, ...newEntries])
+
+    return { addedCount: fitting.length, skippedCount: presets.length - fitting.length }
+  }
+
   function removeCompanion(id: string) {
     sceneRef.current?.removeObject(id)
     setCompanions((prev) => prev.filter((c) => c.id !== id))
@@ -422,6 +470,7 @@ export function OrbitViewer() {
             announce(`${label} preset loaded`)
           }}
           onAddCompanion={addDesignCompanion}
+          onAddCompanionMany={addDesignCompanionsMany}
           enableJ2={enableJ2}
           onEnableJ2Change={setEnableJ2}
         />
@@ -434,6 +483,7 @@ export function OrbitViewer() {
             announce(`Tracking ${tle.name}, NORAD ${tle.noradId}`)
           }}
           onAddCompanion={addRealSatelliteCompanion}
+          onAddCompanionMany={addRealSatelliteCompanionsMany}
         />
       )}
       <div className="absolute bottom-4 left-4 flex flex-col gap-2">

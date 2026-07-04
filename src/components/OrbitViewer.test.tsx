@@ -622,6 +622,122 @@ describe('OrbitViewer companions', () => {
   })
 })
 
+describe('OrbitViewer bulk companions', () => {
+  function fakeTle(noradId: string, name: string): TleRecord {
+    return {
+      name,
+      noradId,
+      line1: `1 ${noradId}U 98067A   26182.50817465  .00006185  00000+0  11827-3 0  9996`,
+      line2: `2 ${noradId}  51.6311 229.1989 0004224 255.0896 104.9625 15.49503254573972`,
+    }
+  }
+
+  it('bulk-adds every checked design preset as a companion in one action', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByLabelText('Select GEO for bulk add'))
+    fireEvent.click(screen.getByLabelText('Select Molniya for bulk add'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 selected as companions' }))
+
+    expect(addDesignCompanionMock).toHaveBeenCalledWith(
+      'design:geo',
+      expect.objectContaining({ eccentricity: 0 }),
+      expect.any(Number),
+    )
+    expect(addDesignCompanionMock).toHaveBeenCalledWith(
+      'design:molniya',
+      expect.objectContaining({ eccentricity: 0.74 }),
+      expect.any(Number),
+    )
+    expect(screen.getByRole('button', { name: 'Focus GEO' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Focus Molniya' })).toBeInTheDocument()
+    expect(screen.getByText('Added 2.')).toBeInTheDocument()
+  })
+
+  it('assigns each bulk-added companion a distinct color, in sequence', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByLabelText('Select GEO for bulk add'))
+    fireEvent.click(screen.getByLabelText('Select Molniya for bulk add'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 selected as companions' }))
+
+    const geoColor = addDesignCompanionMock.mock.calls.find((call) => call[0] === 'design:geo')?.[2]
+    const molniyaColor = addDesignCompanionMock.mock.calls.find(
+      (call) => call[0] === 'design:molniya',
+    )?.[2]
+    expect(geoColor).not.toBe(molniyaColor)
+  })
+
+  it('skips a preset already tracked when bulk-adding, without erroring', () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Add GEO as companion'))
+    addDesignCompanionMock.mockClear()
+
+    fireEvent.click(screen.getByLabelText('Select GEO for bulk add'))
+    fireEvent.click(screen.getByLabelText('Select Molniya for bulk add'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 selected as companions' }))
+
+    expect(addDesignCompanionMock).toHaveBeenCalledTimes(1)
+    expect(addDesignCompanionMock).toHaveBeenCalledWith(
+      'design:molniya',
+      expect.any(Object),
+      expect.any(Number),
+    )
+    expect(
+      screen.getByText('Added 1, skipped 1 (already tracked or companion limit reached).'),
+    ).toBeInTheDocument()
+  })
+
+  it('stops bulk-adding once MAX_COMPANIONS is reached and reports the rest as skipped', async () => {
+    searchByNameMock.mockResolvedValue([
+      fakeTle('10001', 'Sat A'),
+      fakeTle('10002', 'Sat B'),
+      fakeTle('10003', 'Sat C'),
+      fakeTle('10004', 'Sat D'),
+      fakeTle('10005', 'Sat E'),
+      fakeTle('10006', 'Sat F'),
+      fakeTle('10007', 'Sat G'),
+    ])
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+
+    fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'sat' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await screen.findByLabelText('Select Sat A for bulk add')
+
+    for (const name of ['Sat A', 'Sat B', 'Sat C', 'Sat D', 'Sat E', 'Sat F', 'Sat G']) {
+      fireEvent.click(screen.getByLabelText(`Select ${name} for bulk add`))
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Add 7 selected as companions' }))
+
+    // MAX_COMPANIONS is 6 (COMPANION_COLOR_PALETTE.length): all 7 requested, only 6 fit.
+    expect(addRealSatelliteCompanionMock).toHaveBeenCalledTimes(6)
+    expect(
+      screen.getByText('Added 6, skipped 1 (already tracked or companion limit reached).'),
+    ).toBeInTheDocument()
+  })
+
+  it('bulk-adds every valid TLE from a pasted multi-record block as a companion', async () => {
+    render(<OrbitViewer />)
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Paste TLE mode' }))
+    fireEvent.change(screen.getByLabelText('Paste TLE'), {
+      target: { value: `${NAUKA_TLE.name}\n${NAUKA_TLE.line1}\n${NAUKA_TLE.line2}` },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add all as companions' }))
+
+    expect(addRealSatelliteCompanionMock).toHaveBeenCalledWith(
+      'real:49044',
+      NAUKA_TLE,
+      expect.any(Number),
+    )
+    expect(screen.getByRole('button', { name: 'Focus ISS (NAUKA)' })).toBeInTheDocument()
+  })
+})
+
 describe('OrbitViewer ground stations', () => {
   it('toggles a ground station category through to scene.setGroundStationCategoryVisible', () => {
     render(<OrbitViewer />)

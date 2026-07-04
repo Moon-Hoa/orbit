@@ -96,6 +96,52 @@ export function parseTleBlock(text: string): TleParseResult {
   }
 }
 
+export interface TleBlockParseResult {
+  records: TleRecord[]
+  /** One entry per record that failed to parse, prefixed with enough context (its name, or line range) to identify it. */
+  errors: string[]
+}
+
+/**
+ * Parses a block of one or more pasted TLEs, back-to-back - each either the
+ * 3-line (name + line 1 + line 2) or bare 2-line form, auto-detected per
+ * record the same way `parseTleBlock` does for a single one. Every record is
+ * validated with that same rigor (line prefixes/length, matching NORAD IDs,
+ * checksums), so one malformed entry is reported and skipped rather than
+ * corrupting the split for the rest of the paste.
+ */
+export function parseTleBlocks(text: string): TleBlockParseResult {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+  const records: TleRecord[] = []
+  const errors: string[] = []
+
+  let i = 0
+  while (i < lines.length) {
+    const hasName = !lines[i].startsWith('1 ')
+    const chunkSize = hasName ? 3 : 2
+    const chunk = lines.slice(i, i + chunkSize)
+
+    if (chunk.length < chunkSize) {
+      errors.push(`Incomplete record near line ${i + 1}: expected ${chunkSize} lines, got ${chunk.length}.`)
+      break
+    }
+
+    const result = parseTleBlock(chunk.join('\n'))
+    if (result.ok) {
+      records.push(result.record)
+    } else {
+      errors.push(`${hasName ? chunk[0] : `lines ${i + 1}-${i + chunkSize}`}: ${result.error}`)
+    }
+    i += chunkSize
+  }
+
+  return { records, errors }
+}
+
 function readCache<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key)

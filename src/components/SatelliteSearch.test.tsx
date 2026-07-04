@@ -18,6 +18,13 @@ const ISS_TLE: TleRecord = {
   line2: '2 25544  51.6311 229.1989 0004224 255.0896 104.9625 15.49503254573972',
 }
 
+const NAUKA_TLE: TleRecord = {
+  name: 'ISS (NAUKA)',
+  noradId: '49044',
+  line1: '1 49044U 21066A   26182.50817465  .00006185  00000+0  11827-3 0  9992',
+  line2: '2 49044  51.6311 229.1989 0004224 255.0896 104.9625 15.49503254608691',
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -73,6 +80,38 @@ describe('SatelliteSearch', () => {
 
     expect(onAddCompanion).toHaveBeenCalledWith(ISS_TLE)
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('does not render bulk-select checkboxes when onAddCompanionMany is omitted', async () => {
+    searchByNameMock.mockResolvedValue([ISS_TLE])
+    render(<SatelliteSearch selectedTle={null} onSelect={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'iss' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+    await screen.findByRole('button', { name: /ISS \(ZARYA\)/ })
+    expect(screen.queryByLabelText(/Select .* for bulk add/)).not.toBeInTheDocument()
+  })
+
+  it('calls onAddCompanionMany with every checked search result, and shows the returned summary', async () => {
+    searchByNameMock.mockResolvedValue([ISS_TLE, NAUKA_TLE])
+    const onAddCompanionMany = vi.fn().mockReturnValue({ addedCount: 1, skippedCount: 1 })
+    render(
+      <SatelliteSearch selectedTle={null} onSelect={vi.fn()} onAddCompanionMany={onAddCompanionMany} />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'iss' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await screen.findByRole('button', { name: /ISS \(ZARYA\)/ })
+
+    fireEvent.click(screen.getByLabelText('Select ISS (ZARYA) for bulk add'))
+    fireEvent.click(screen.getByLabelText('Select ISS (NAUKA) for bulk add'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 selected as companions' }))
+
+    expect(onAddCompanionMany).toHaveBeenCalledWith([ISS_TLE, NAUKA_TLE])
+    expect(
+      screen.getByText('Added 1, skipped 1 (already tracked or companion limit reached).'),
+    ).toBeInTheDocument()
   })
 
   it('shows a message when no results are found', async () => {
@@ -151,6 +190,64 @@ describe('SatelliteSearch', () => {
         screen.getByText('Expected 2 lines (no name) or 3 lines (with name), got 1.'),
       ).toBeInTheDocument()
       expect(onSelect).not.toHaveBeenCalled()
+    })
+
+    it('does not render an "add all as companions" button when onAddCompanionMany is omitted', () => {
+      render(<SatelliteSearch selectedTle={null} onSelect={vi.fn()} />)
+      switchToPasteMode()
+      expect(screen.queryByRole('button', { name: 'Add all as companions' })).not.toBeInTheDocument()
+    })
+
+    it('adds every valid TLE in a multi-record paste as a companion, reporting parse errors separately', () => {
+      const onAddCompanionMany = vi.fn().mockReturnValue({ addedCount: 2, skippedCount: 0 })
+      render(
+        <SatelliteSearch
+          selectedTle={null}
+          onSelect={vi.fn()}
+          onAddCompanionMany={onAddCompanionMany}
+        />,
+      )
+      switchToPasteMode()
+
+      const badLine1 = `2${ISS_TLE.line1.slice(1)}`
+      fireEvent.change(screen.getByLabelText('Paste TLE'), {
+        target: {
+          value: [
+            ISS_TLE.name,
+            ISS_TLE.line1,
+            ISS_TLE.line2,
+            'Broken entry',
+            badLine1,
+            ISS_TLE.line2,
+            NAUKA_TLE.name,
+            NAUKA_TLE.line1,
+            NAUKA_TLE.line2,
+          ].join('\n'),
+        },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Add all as companions' }))
+
+      expect(onAddCompanionMany).toHaveBeenCalledWith([ISS_TLE, NAUKA_TLE])
+      expect(screen.getByText('Added 2.')).toBeInTheDocument()
+      expect(screen.getByText('Broken entry: Line 1 must start with "1 ".')).toBeInTheDocument()
+    })
+
+    it('does not call onAddCompanionMany when nothing in the paste parses successfully', () => {
+      const onAddCompanionMany = vi.fn()
+      render(
+        <SatelliteSearch
+          selectedTle={null}
+          onSelect={vi.fn()}
+          onAddCompanionMany={onAddCompanionMany}
+        />,
+      )
+      switchToPasteMode()
+
+      fireEvent.change(screen.getByLabelText('Paste TLE'), { target: { value: 'not a tle at all' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add all as companions' }))
+
+      expect(onAddCompanionMany).not.toHaveBeenCalled()
+      expect(screen.getByText('Added 0.')).toBeInTheDocument()
     })
   })
 })
