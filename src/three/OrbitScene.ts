@@ -5,6 +5,8 @@ import {
   type GeodeticCoordinates,
   type OrbitalElements,
   type Vector3,
+  ecefToEci,
+  geodeticToEcefDirection,
   magnitude,
 } from '../engine'
 import { type TleRecord, shadowFractionAt, solarSubpointAt } from '../satellite'
@@ -35,6 +37,13 @@ export interface TickInfo {
    * (design mode has no notion of "real" sun position).
    */
   shadowFraction: number | null
+  /**
+   * The real calendar date this instant corresponds to (the scene's
+   * wall-clock reference plus elapsed sim time). Always present, in both
+   * modes - this is what drives the globe's day/night shading and is
+   * re-anchored to "now" by `syncToNow`.
+   */
+  currentDate: Date
 }
 
 /** Camera position and orbit-controls look-at target, both in scene units. */
@@ -67,12 +76,16 @@ export interface OrbitSceneOptions {
   onSolarUpdate?: (subsolarPoint: GeodeticCoordinates | null) => void
   /** Reported alongside ground tracks (same throttling): closest-approach between the two tracked objects, or null unless exactly two are tracked. */
   onClosestApproachUpdate?: (result: ClosestApproachResult | null) => void
+  /** Called when scene-driven playback (see `setPlaybackCap`) stops itself on reaching its cap, so the UI can mirror the paused state. */
+  onAutoPause?: () => void
 }
 
 interface TrackedObject {
   source: OrbitSource
   orbitPath: THREE.Mesh
   satelliteMarker: THREE.Mesh
+  pathColor: number
+  markerColor: number
 }
 
 /**
@@ -102,6 +115,8 @@ export class OrbitScene {
   private readonly onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
   private readonly onSolarUpdate?: (subsolarPoint: GeodeticCoordinates | null) => void
   private readonly onClosestApproachUpdate?: (result: ClosestApproachResult | null) => void
+  private readonly onAutoPause?: () => void
+  private readonly sun: THREE.DirectionalLight
 
   private readonly objects = new Map<string, TrackedObject>()
   private focusedObjectId: string = PRIMARY_OBJECT_ID
@@ -111,6 +126,10 @@ export class OrbitScene {
   private animationFrameId: number | null = null
   private lastFrameTime: number | null = null
   private lastGroundTrackReportTime: number | null = null
+  /** Wall-clock instant that `simTimeSeconds = 0` corresponds to. Drives the globe's day/night shading; re-anchored to "now" by `syncToNow`. */
+  private referenceDate = new Date()
+  /** When set, playback auto-pauses once `simTimeSeconds` reaches this value (see `setPlaybackCap`). */
+  private playbackStopAtSimTimeSeconds: number | null = null
 
   constructor(container: HTMLElement, options: OrbitSceneOptions) {
     this.container = container
@@ -118,6 +137,7 @@ export class OrbitScene {
     this.onGroundTrackUpdate = options.onGroundTrackUpdate
     this.onSolarUpdate = options.onSolarUpdate
     this.onClosestApproachUpdate = options.onClosestApproachUpdate
+    this.onAutoPause = options.onAutoPause
     this.scene = new THREE.Scene()
 
     this.camera = new THREE.PerspectiveCamera(50, this.aspectRatio, 0.1, 1000)
@@ -149,9 +169,9 @@ export class OrbitScene {
     }
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.35))
-    const sun = new THREE.DirectionalLight(0xffffff, 1.5)
-    sun.position.set(5, 3, 5)
-    this.scene.add(sun)
+    this.sun = new THREE.DirectionalLight(0xffffff, 1.5)
+    this.sun.position.copy(this.sunDirectionInScene(this.referenceDate))
+    this.scene.add(this.sun)
 
     this.scene.add(createEarth())
 
@@ -188,7 +208,7 @@ export class OrbitScene {
     const satelliteMarker = createSatelliteMarker(markerColor)
     this.scene.add(orbitPath)
     this.scene.add(satelliteMarker)
-    return { source, orbitPath, satelliteMarker }
+    return { source, orbitPath, satelliteMarker, pathColor, markerColor }
   }
 
   private disposeTrackedObject(object: TrackedObject): void {
@@ -288,8 +308,60 @@ export class OrbitScene {
     this.syncToCurrentState(true)
   }
 
+  /**
+   * Re-anchors every tracked object, and the globe's day/night reference, to
+   * the current wall-clock moment, then resets the sim clock to 0. Real
+   * satellites are re-propagated from "now" (their SGP4 state and orbit-path
+   * window both depend on their reference date); design orbits have no real
+   * epoch, so this is equivalent to `seek(0)` for them. Clears any pending
+   * playback cap from a previous `setPlaybackCap` call.
+   */
+  syncToNow(): void {
+    this.referenceDate = new Date()
+    for (const [id, object] of this.objects) {
+      const reanchored = object.source.reanchorTo?.(this.referenceDate)
+      if (!reanchored) continue
+      this.disposeTrackedObject(object)
+      this.objects.set(
+        id,
+        this.createTrackedObject(reanchored, object.pathColor, object.markerColor),
+      )
+    }
+    this.simTimeSeconds = 0
+    this.playbackStopAtSimTimeSeconds = null
+    this.syncToCurrentState(true)
+  }
+
+  /**
+   * Caps forward playback: once `simTimeSeconds` reaches `simTimeSeconds`
+   * (absolute, not a duration) while playing, playback auto-pauses and
+   * `onAutoPause` fires. Pass `null` to clear a previously-set cap. Typically
+   * called right after `syncToNow()` for a "preview the next 24 hours" flow -
+   * combine with the caller setting `isPlaying`/calling `play()`.
+   */
+  setPlaybackCap(simTimeSeconds: number | null): void {
+    this.playbackStopAtSimTimeSeconds = simTimeSeconds
+  }
+
+  /**
+   * Where the sun should render in scene space: the real subsolar point (from
+   * `currentDate`), rotated into the static globe mesh's frame by the same
+   * "ECI ≡ ECEF at simTimeSeconds = 0" convention `eciToEcef`/`ecefToEci` use
+   * elsewhere - this is what makes the day/night terminator sweep across the
+   * (non-rotating) globe as sim time advances, rather than sitting nearly
+   * still the way the Sun's true inertial-frame position would (Earth's
+   * rotation, not its position, is what actually drives day/night).
+   */
+  private sunDirectionInScene(currentDate: Date): THREE.Vector3 {
+    const subsolarEcefDirection = geodeticToEcefDirection(solarSubpointAt(currentDate))
+    return eciToScene(ecefToEci(subsolarEcefDirection, this.simTimeSeconds))
+  }
+
   /** Repositions every tracked object at the current sim time, and reports focused-object stats/ground tracks. */
   private syncToCurrentState(forceGroundTrack: boolean): void {
+    const currentDate = new Date(this.referenceDate.getTime() + this.simTimeSeconds * 1000)
+    this.sun.position.copy(this.sunDirectionInScene(currentDate))
+
     let focusedAltitudeKm: number | null = null
     let focusedSpeedKmS: number | null = null
     let focusedWrappedSimTime = 0
@@ -324,6 +396,7 @@ export class OrbitScene {
         altitudeKm: focusedAltitudeKm,
         speedKmS: focusedSpeedKmS,
         shadowFraction,
+        currentDate,
       })
     }
 
@@ -370,6 +443,15 @@ export class OrbitScene {
 
       if (this.isPlaying) {
         this.simTimeSeconds += deltaSeconds * this.speedMultiplier
+        if (
+          this.playbackStopAtSimTimeSeconds !== null &&
+          this.simTimeSeconds >= this.playbackStopAtSimTimeSeconds
+        ) {
+          this.simTimeSeconds = this.playbackStopAtSimTimeSeconds
+          this.playbackStopAtSimTimeSeconds = null
+          this.isPlaying = false
+          this.onAutoPause?.()
+        }
         this.syncToCurrentState(false)
       }
 

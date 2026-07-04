@@ -10,11 +10,14 @@ interface PlaybackControlsProps {
   periodSeconds: number
   onScrub: (event: ChangeEvent<HTMLInputElement>) => void
   onJumpToEpoch: () => void
+  onSyncToNow: () => void
+  onSyncToNowAndAdvance: () => void
   scrubRef: RefObject<HTMLInputElement | null>
   timeReadoutRef: RefObject<HTMLSpanElement | null>
+  realTimeReadoutRef: RefObject<HTMLSpanElement | null>
 }
 
-/** Play/pause, speed multiplier, a scrub bar, and a jump-to-epoch shortcut. */
+/** Play/pause, speed multiplier, a scrub bar, a jump-to-epoch shortcut, and sync-to-now shortcuts. */
 export function PlaybackControls({
   isPlaying,
   onTogglePlay,
@@ -23,12 +26,15 @@ export function PlaybackControls({
   periodSeconds,
   onScrub,
   onJumpToEpoch,
+  onSyncToNow,
+  onSyncToNowAndAdvance,
   scrubRef,
   timeReadoutRef,
+  realTimeReadoutRef,
 }: PlaybackControlsProps) {
   return (
     <div className="absolute bottom-4 left-1/2 flex w-[32rem] max-w-[90vw] -translate-x-1/2 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 backdrop-blur">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={onTogglePlay}
@@ -43,6 +49,20 @@ export function PlaybackControls({
         >
           Jump to epoch
         </button>
+        <button
+          type="button"
+          onClick={onSyncToNow}
+          className="rounded bg-slate-700 px-3 py-1 text-sm text-slate-100 hover:bg-slate-600"
+        >
+          Sync to now
+        </button>
+        <button
+          type="button"
+          onClick={onSyncToNowAndAdvance}
+          className="rounded bg-slate-700 px-3 py-1 text-sm text-slate-100 hover:bg-slate-600"
+        >
+          Sync to now, +24h
+        </button>
         <select
           aria-label="Speed multiplier"
           value={speedMultiplier}
@@ -55,12 +75,13 @@ export function PlaybackControls({
             </option>
           ))}
         </select>
-        <span
-          ref={timeReadoutRef}
-          data-testid="time-readout"
-          className="ml-auto font-mono text-xs text-slate-300"
-        >
-          T+00:00:00
+        <span className="ml-auto flex flex-col items-end font-mono text-xs text-slate-300">
+          <span ref={timeReadoutRef} data-testid="time-readout">
+            T+00:00:00
+          </span>
+          <span ref={realTimeReadoutRef} data-testid="real-time-readout" className="text-slate-500">
+            &nbsp;
+          </span>
         </span>
       </div>
       <input

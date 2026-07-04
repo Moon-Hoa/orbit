@@ -25,4 +25,11 @@ export interface OrbitSource {
    * epoch. Omitted for designed orbits, which have no notion of "real" time.
    */
   getCurrentDate?(simTimeSeconds: number): Date
+  /**
+   * Returns an equivalent source re-anchored so `simTimeSeconds = 0` means
+   * `date` - used by "sync to now" to re-propagate real satellites from the
+   * current moment. Omitted for designed orbits, which have no real epoch to
+   * re-anchor (a plain `seek(0)` already does the equivalent for them).
+   */
+  reanchorTo?(date: Date): OrbitSource
 }

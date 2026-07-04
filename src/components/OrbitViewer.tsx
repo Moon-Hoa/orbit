@@ -37,6 +37,9 @@ import { StatsPanel } from './StatsPanel'
 /** NORAD catalog number for the ISS - used as the default when entering track-real mode. */
 const ISS_NORAD_ID = '25544'
 
+/** How far "Sync to now, +24h" plays forward, in simulated seconds. */
+const ADVANCE_WINDOW_SECONDS = 24 * 60 * 60
+
 const UNIT_SYSTEM_STORAGE_KEY = 'orbit:unit-system'
 
 function loadStoredUnitSystem(): UnitSystem {
@@ -71,6 +74,7 @@ export function OrbitViewer() {
   const sceneRef = useRef<OrbitScene | null>(null)
   const scrubRef = useRef<HTMLInputElement>(null)
   const timeReadoutRef = useRef<HTMLSpanElement>(null)
+  const realTimeReadoutRef = useRef<HTMLSpanElement>(null)
   const currentAltitudeRef = useRef<HTMLSpanElement>(null)
   const currentSpeedRef = useRef<HTMLSpanElement>(null)
   const currentEclipseStatusRef = useRef<HTMLSpanElement>(null)
@@ -175,10 +179,17 @@ export function OrbitViewer() {
     const scene = new OrbitScene(container, {
       initialElements: elements,
       initialCamera: initialScenario?.camera,
-      onTick: ({ simTimeSeconds, altitudeKm, speedKmS, shadowFraction }) => {
+      onTick: ({ simTimeSeconds, altitudeKm, speedKmS, shadowFraction, currentDate }) => {
         if (scrubRef.current) scrubRef.current.value = String(simTimeSeconds)
         if (timeReadoutRef.current) {
           timeReadoutRef.current.textContent = formatElapsed(simTimeSeconds)
+        }
+        if (realTimeReadoutRef.current) {
+          realTimeReadoutRef.current.textContent = currentDate.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })
         }
         const altitudeText = formatDistanceKm(altitudeKm, unitSystemRef.current)
         if (currentAltitudeRef.current) currentAltitudeRef.current.textContent = altitudeText
@@ -214,6 +225,7 @@ export function OrbitViewer() {
       },
       onSolarUpdate: setSubsolarPoint,
       onClosestApproachUpdate: setClosestApproach,
+      onAutoPause: () => setIsPlaying(false),
     })
     sceneRef.current = scene
     scene.start()
@@ -339,6 +351,16 @@ export function OrbitViewer() {
     sceneRef.current?.setFocusedObject(id)
   }
 
+  function syncToNow() {
+    sceneRef.current?.syncToNow()
+  }
+
+  function syncToNowAndAdvance() {
+    sceneRef.current?.syncToNow()
+    sceneRef.current?.setPlaybackCap(ADVANCE_WINDOW_SECONDS)
+    setIsPlaying(true)
+  }
+
   return (
     <div className="relative h-screen w-screen bg-black">
       <div ref={containerRef} className="absolute inset-0" />
@@ -431,8 +453,11 @@ export function OrbitViewer() {
         periodSeconds={periodSeconds}
         onScrub={(event) => sceneRef.current?.seek(Number(event.target.value))}
         onJumpToEpoch={() => sceneRef.current?.seek(0)}
+        onSyncToNow={syncToNow}
+        onSyncToNowAndAdvance={syncToNowAndAdvance}
         scrubRef={scrubRef}
         timeReadoutRef={timeReadoutRef}
+        realTimeReadoutRef={realTimeReadoutRef}
       />
     </div>
   )

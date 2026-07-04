@@ -64,4 +64,8 @@ export class RealSatelliteSource implements OrbitSource {
   getCurrentDate(simTimeSeconds: number): Date {
     return this.dateAt(simTimeSeconds)
   }
+
+  reanchorTo(date: Date): RealSatelliteSource {
+    return new RealSatelliteSource(this.tle, date)
+  }
 }
