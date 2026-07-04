@@ -5,7 +5,6 @@ import {
   type GeodeticCoordinates,
   type OrbitalElements,
   type Vector3,
-  ecefToEci,
   geodeticToEcefDirection,
   magnitude,
   scale,
@@ -406,25 +405,37 @@ export class OrbitScene {
   }
 
   /**
-   * Where the sun should render in scene space: the real subsolar point (from
-   * `currentDate`), rotated into the static globe mesh's frame by the same
-   * "ECI ≡ ECEF at simTimeSeconds = 0" convention `eciToEcef`/`ecefToEci` use
-   * elsewhere - this is what makes the day/night terminator sweep across the
-   * (non-rotating) globe as sim time advances, rather than sitting nearly
-   * still the way the Sun's true inertial-frame position would (Earth's
-   * rotation, not its position, is what actually drives day/night).
+   * Where the sun should render in scene space: the real subsolar point at
+   * `currentDate`.
+   *
+   * This mesh never rotates to simulate Earth's spin (same as satellite
+   * markers, which are placed via plain ECI with no rotation either) - so
+   * the globe's fixed orientation is this app's stand-in for the Earth-fixed
+   * (ECEF) frame at every instant, not just at some epoch. Earth-fixed
+   * things (this, and ground station pins below) therefore map to scene
+   * space directly, with no time-dependent rotation: the subsolar point's
+   * own real ECEF longitude already sweeps westward as `currentDate`
+   * advances (Earth's rotation, via GMST inside `solarSubpointAt`), and that
+   * alone is what drags the terminator across the frozen globe. An earlier
+   * version of this code additionally rotated the result by
+   * simTimeSeconds * EARTH_ROTATION_RATE_RAD_S, meant to compensate for the
+   * globe not spinning - but that rotation runs in the same direction the
+   * subsolar point is already sweeping, so it nearly exactly cancelled the
+   * real motion instead of adding to it, leaving the terminator effectively
+   * frozen.
    */
   private sunDirectionInScene(currentDate: Date): THREE.Vector3 {
-    const subsolarEcefDirection = geodeticToEcefDirection(solarSubpointAt(currentDate))
-    return eciToScene(ecefToEci(subsolarEcefDirection, this.simTimeSeconds))
+    return eciToScene(geodeticToEcefDirection(solarSubpointAt(currentDate)))
   }
 
   /**
-   * Ground stations are fixed on the real Earth's surface (geodetic/ECEF),
-   * so - same reasoning as `sunDirectionInScene` - their scene position has
-   * to be rotated into the static globe mesh's frame and re-computed as sim
-   * time advances, or pins drift out of registration with the surface
-   * texture instead of staying "planted" on it.
+   * Ground stations are fixed on the real Earth's surface (geodetic/ECEF).
+   * Per `sunDirectionInScene`'s note above, this app's static globe mesh
+   * stands in for the ECEF frame at every instant, so - unlike satellites,
+   * which move - a station's scene position never changes once computed;
+   * it does NOT get re-rotated as sim time advances (an earlier version did,
+   * which visibly slid pins across the (non-rotating) globe during
+   * playback).
    */
   private updateGroundStationPins(): void {
     for (const state of this.groundStationCategories.values()) {
@@ -438,7 +449,7 @@ export class OrbitScene {
           altitudeKm: 0,
         })
         const ecefPositionKm = scale(ecefDirection, EARTH_RADIUS_KM)
-        pin.position.copy(eciToScene(ecefToEci(ecefPositionKm, this.simTimeSeconds)))
+        pin.position.copy(eciToScene(ecefPositionKm))
       }
     }
   }
@@ -501,7 +512,6 @@ export class OrbitScene {
   private syncToCurrentState(forceGroundTrack: boolean): void {
     const currentDate = new Date(this.referenceDate.getTime() + this.simTimeSeconds * 1000)
     this.sun.position.copy(this.sunDirectionInScene(currentDate))
-    this.updateGroundStationPins()
 
     let focusedAltitudeKm: number | null = null
     let focusedSpeedKmS: number | null = null

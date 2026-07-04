@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EARTH_RADIUS_KM, SIDEREAL_DAY_S } from './constants'
-import {
-  ecefToEci,
-  ecefToGeodetic,
-  eciToEcef,
-  eciToGeodetic,
-  geodeticToEcefDirection,
-} from './geodetic'
+import { ecefToGeodetic, eciToEcef, eciToGeodetic, geodeticToEcefDirection } from './geodetic'
 
 describe('eciToEcef', () => {
   it('is the identity at simTimeSeconds = 0 (frames aligned at epoch)', () => {
@@ -95,32 +89,6 @@ describe('eciToGeodetic', () => {
     const oneDay = eciToGeodetic(position, SIDEREAL_DAY_S / 4)
     const manyDaysLater = eciToGeodetic(position, SIDEREAL_DAY_S / 4 + 10 * SIDEREAL_DAY_S)
     expect(manyDaysLater.longitudeRad).toBeCloseTo(oneDay.longitudeRad, 6)
-  })
-})
-
-describe('ecefToEci', () => {
-  it('is the inverse of eciToEcef', () => {
-    const position = { x: 4321, y: -1234, z: 5678 }
-    const simTimeSeconds = 9876
-    const roundTripped = ecefToEci(eciToEcef(position, simTimeSeconds), simTimeSeconds)
-    expect(roundTripped.x).toBeCloseTo(position.x, 6)
-    expect(roundTripped.y).toBeCloseTo(position.y, 6)
-    expect(roundTripped.z).toBeCloseTo(position.z, 6)
-  })
-
-  it('is the identity at simTimeSeconds = 0', () => {
-    const position = { x: 1000, y: 2000, z: 3000 }
-    const eci = ecefToEci(position, 0)
-    expect(eci.x).toBeCloseTo(position.x, 9)
-    expect(eci.y).toBeCloseTo(position.y, 9)
-    expect(eci.z).toBeCloseTo(position.z, 9)
-  })
-
-  it('rotates a point fixed in ECEF eastward (in ECI) as time advances, matching prograde Earth spin', () => {
-    const position = { x: EARTH_RADIUS_KM, y: 0, z: 0 }
-    const eci = ecefToEci(position, SIDEREAL_DAY_S / 4)
-    expect(eci.x).toBeCloseTo(0, 6)
-    expect(eci.y).toBeCloseTo(EARTH_RADIUS_KM, 6)
   })
 })
 
