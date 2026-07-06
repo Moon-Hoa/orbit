@@ -33,7 +33,7 @@ export function PlaybackControls({
   realTimeReadoutRef,
 }: PlaybackControlsProps) {
   return (
-    <div className="absolute bottom-4 left-1/2 flex w-[32rem] max-w-[90vw] -translate-x-1/2 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 backdrop-blur">
+    <div className="fixed bottom-4 left-1/2 z-10 flex w-[32rem] max-w-[90vw] -translate-x-1/2 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 backdrop-blur">
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"

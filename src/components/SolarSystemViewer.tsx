@@ -80,7 +80,7 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
     <div className="relative h-screen w-screen bg-black">
       <div ref={containerRef} className="absolute inset-0" />
 
-      <div className="absolute top-4 left-4 w-72 rounded-lg bg-slate-900/80 p-3 text-xs text-slate-100 backdrop-blur">
+      <div className="absolute top-4 left-4 max-h-[45vh] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg bg-slate-900/80 p-3 text-xs text-slate-100 backdrop-blur">
         <h2 className="mb-2 text-sm font-semibold text-slate-100">Currently in transit</h2>
         {inTransit.length === 0 ? (
           <p className="text-slate-400">No spacecraft currently in transit at this date.</p>

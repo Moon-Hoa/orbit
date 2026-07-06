@@ -45,7 +45,7 @@ export function HohmannPlanner() {
   }, [fromAltitudeKm, toAltitudeKm])
 
   return (
-    <div className="absolute right-4 bottom-4 flex w-72 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 text-xs backdrop-blur">
+    <div className="relative flex max-h-[45vh] w-full flex-col gap-2 overflow-y-auto rounded-lg bg-slate-900/80 p-3 text-xs backdrop-blur lg:absolute lg:right-4 lg:bottom-4 lg:w-72 lg:max-w-[calc(100vw-2rem)]">
       <h2 className="text-sm font-semibold text-slate-100">Hohmann transfer</h2>
       <p className="text-slate-400">
         Circular, coplanar orbits only — no plane-change delta-v, no eccentric orbits.

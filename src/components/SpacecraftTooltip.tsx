@@ -2,6 +2,10 @@ import { useEffect } from 'react'
 import { PLANET_LABELS } from '../engine'
 import type { SpacecraftTransit } from '../solarSystem'
 import type { MarkerScreenPosition } from '../three/markerScreenPosition'
+import { clampToViewportWidth } from './clampToViewport'
+
+/** Half of the tooltip's rendered width (the `w-64` class below - 16rem/2 = 8rem = 128px at the default 16px root font size). */
+const TOOLTIP_HALF_WIDTH_PX = 128
 
 interface SpacecraftTooltipProps {
   /** Screen-pixel anchor for the currently-selected spacecraft marker, updated every frame; `null` when nothing is selected. */
@@ -43,21 +47,25 @@ export function SpacecraftTooltip({ position, selection, onDismiss }: Spacecraft
 
   if (!isOpen || !selection) return null
 
+  // See MarkerTooltip's identical clamp - keeps the tooltip on-screen when
+  // its marker is near the left/right edge of a narrow viewport.
+  const clampedLeftPx = clampToViewportWidth(position.xPx, TOOLTIP_HALF_WIDTH_PX)
+
   return (
     <div
-      className="absolute z-20 w-64 rounded-lg bg-slate-900/95 p-2.5 text-xs text-slate-100 shadow-lg backdrop-blur"
-      style={{ left: position.xPx, top: position.yPx, transform: 'translate(-50%, calc(-100% - 12px))' }}
+      className="fixed z-20 w-64 rounded-lg bg-slate-900/95 p-2.5 text-xs text-slate-100 shadow-lg backdrop-blur"
+      style={{ left: clampedLeftPx, top: position.yPx, transform: 'translate(-50%, calc(-100% - 12px))' }}
     >
       <button
         type="button"
         onClick={onDismiss}
         aria-label="Close"
-        className="absolute top-1 right-1 px-1 text-slate-400 hover:text-slate-100"
+        className="absolute top-0 right-0 flex min-h-11 min-w-11 items-center justify-center text-slate-400 hover:text-slate-100"
       >
         ×
       </button>
 
-      <p className="pr-4 font-medium">{selection.name}</p>
+      <p className="pr-10 font-medium">{selection.name}</p>
       <p className="text-slate-400">{selection.agency}</p>
       <p className="text-slate-400">
         {PLANET_LABELS[selection.departureBody]} → {PLANET_LABELS[selection.arrivalBody]}:{' '}

@@ -4,7 +4,7 @@ import type { MarkerScreenPosition } from '../three/markerScreenPosition'
 import type { CelestialObjectSelection, GroundStationSelection } from '../three/OrbitScene'
 import { MarkerTooltip } from './MarkerTooltip'
 
-const visiblePosition: MarkerScreenPosition = { xPx: 120, yPx: 80, occluded: false }
+const visiblePosition: MarkerScreenPosition = { xPx: 400, yPx: 80, occluded: false }
 
 const svalbardSelection: GroundStationSelection = {
   station: { id: 'ksat-svalbard', name: 'Svalbard (SvalSat)', latitudeDeg: 78.2298, longitudeDeg: 15.4078 },
@@ -85,7 +85,18 @@ describe('MarkerTooltip', () => {
     renderTooltip({ groundStationSelection: svalbardSelection })
     const name = screen.getByText('Svalbard (SvalSat)')
     const popup = name.closest('div')!
-    expect(popup).toHaveStyle({ left: '120px', top: '80px' })
+    expect(popup).toHaveStyle({ left: '400px', top: '80px' })
+  })
+
+  it('clamps horizontally so it stays on-screen when the marker is near the viewport edge', () => {
+    renderTooltip({
+      position: { xPx: 5, yPx: 80, occluded: false },
+      groundStationSelection: svalbardSelection,
+    })
+    const name = screen.getByText('Svalbard (SvalSat)')
+    const popup = name.closest('div')!
+    expect(popup).not.toHaveStyle({ left: '5px' })
+    expect(Number.parseFloat(getComputedStyle(popup).left)).toBeGreaterThan(5)
   })
 
   it('shows the selected ground station and lets it be used for pass prediction', () => {

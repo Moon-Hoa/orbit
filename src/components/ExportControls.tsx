@@ -54,7 +54,7 @@ export function ExportControls({
   }
 
   return (
-    <div className="flex items-center gap-1.5 rounded-lg bg-slate-900/80 p-1.5 text-xs backdrop-blur">
+    <div className="flex flex-wrap items-center justify-end gap-1.5 rounded-lg bg-slate-900/80 p-1.5 text-xs backdrop-blur">
       <select
         aria-label="Export window"
         value={exportWindow}

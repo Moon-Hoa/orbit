@@ -1,6 +1,10 @@
 import { useEffect } from 'react'
 import type { MarkerScreenPosition } from '../three/markerScreenPosition'
 import type { CelestialObjectSelection, GroundStationSelection } from '../three/OrbitScene'
+import { clampToViewportWidth } from './clampToViewport'
+
+/** Half of the tooltip's rendered width (the `w-56` class below - 14rem/2 = 7rem = 112px at the default 16px root font size). */
+const TOOLTIP_HALF_WIDTH_PX = 112
 
 interface MarkerTooltipProps {
   /** Screen-pixel anchor for the currently-selected marker, updated every frame as the camera moves; `null` when nothing is selected. */
@@ -42,23 +46,31 @@ export function MarkerTooltip({
   if (!isOpen) return null
   if (!groundStationSelection && !celestialObjectSelection) return null
 
+  // Clamp horizontally so the tooltip (centered on the marker by default,
+  // via the transform below) can't overflow off the left/right edge of a
+  // narrow viewport - the marker itself can be anywhere on screen, including
+  // right at the edge. `TOOLTIP_HALF_WIDTH_PX` must track the `w-56` class
+  // below. Vertical clamping is a known gap (a marker very near the top edge
+  // can still clip the tooltip above it).
+  const clampedLeftPx = clampToViewportWidth(position.xPx, TOOLTIP_HALF_WIDTH_PX)
+
   return (
     <div
-      className="absolute z-20 w-56 rounded-lg bg-slate-900/95 p-2.5 text-xs text-slate-100 shadow-lg backdrop-blur"
-      style={{ left: position.xPx, top: position.yPx, transform: 'translate(-50%, calc(-100% - 12px))' }}
+      className="fixed z-20 w-56 rounded-lg bg-slate-900/95 p-2.5 text-xs text-slate-100 shadow-lg backdrop-blur"
+      style={{ left: clampedLeftPx, top: position.yPx, transform: 'translate(-50%, calc(-100% - 12px))' }}
     >
       <button
         type="button"
         onClick={onDismiss}
         aria-label="Close"
-        className="absolute top-1 right-1 px-1 text-slate-400 hover:text-slate-100"
+        className="absolute top-0 right-0 flex min-h-11 min-w-11 items-center justify-center text-slate-400 hover:text-slate-100"
       >
         ×
       </button>
 
       {groundStationSelection && (
         <>
-          <p className="pr-4 font-medium">{groundStationSelection.station.name}</p>
+          <p className="pr-10 font-medium">{groundStationSelection.station.name}</p>
           <p className="text-slate-400">
             {groundStationSelection.categoryLabel} · {groundStationSelection.station.latitudeDeg.toFixed(2)}°,{' '}
             {groundStationSelection.station.longitudeDeg.toFixed(2)}°
@@ -77,7 +89,7 @@ export function MarkerTooltip({
 
       {celestialObjectSelection && (
         <>
-          <p className="pr-4 font-medium">{celestialObjectSelection.object.name}</p>
+          <p className="pr-10 font-medium">{celestialObjectSelection.object.name}</p>
           <p className="text-slate-400">
             {celestialObjectSelection.object.mission} · {celestialObjectSelection.object.agency}
           </p>

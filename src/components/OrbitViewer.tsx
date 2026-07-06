@@ -535,12 +535,23 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
   }
 
   return (
-    <div className="relative h-screen w-screen bg-black">
-      <div ref={containerRef} className="absolute inset-0" />
+    <div className="relative h-screen w-screen overflow-y-auto bg-black">
+      <div ref={containerRef} className="fixed inset-0" />
       <div aria-live="polite" role="status" className="sr-only">
         {announcement}
       </div>
-      <AccessibleDataView
+      {/*
+        Below `lg`, this wrapper stacks every panel into one scrollable
+        column (each panel switches from `absolute <corner>` to `relative
+        w-full` at that breakpoint) instead of the corner-docked layout that
+        only has room on wider screens - see the mobile-friendly issue.
+        `lg:contents` makes the wrapper itself disappear from the box tree at
+        that breakpoint, so its children resume positioning directly against
+        this component's root (exactly like today) rather than against this
+        div.
+      */}
+      <div className="relative flex flex-col gap-2 p-4 pb-32 lg:contents lg:p-0 lg:pb-0">
+        <AccessibleDataView
         isOpen={isDataViewOpen}
         onToggle={() => setIsDataViewOpen((open) => !open)}
         mode={mode}
@@ -584,7 +595,7 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
           onAddCompanionMany={addRealSatelliteCompanionsMany}
         />
       )}
-      <div className="absolute bottom-4 left-4 flex flex-col gap-2">
+      <div className="relative flex max-h-[45vh] flex-col gap-2 overflow-y-auto lg:absolute lg:bottom-4 lg:left-4 lg:max-w-[calc(100vw-2rem)]">
         <StatsPanel
           orbitShape={orbitShape}
           currentAltitudeRef={currentAltitudeRef}
@@ -604,8 +615,8 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
       </div>
       {isTrackingReal && <GroundStationPanel tle={selectedTle} presetLocation={passPredictionRequest} />}
       {mode === 'design' && currentBody.hasEarthOnlyFeatures && <HohmannPlanner />}
-      <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
-        <div className="flex gap-2">
+      <div className="relative flex max-h-[70vh] flex-col items-end gap-2 overflow-y-auto lg:absolute lg:top-4 lg:right-4 lg:max-w-[calc(100vw-2rem)]">
+        <div className="flex flex-wrap justify-end gap-2">
           <ViewModeSelector viewMode="body" onChange={onViewModeChange} />
           <CentralBodySelector centralBody={centralBodyId} onChange={changeCentralBody} />
           <ModeToggle
@@ -643,6 +654,7 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
             />
           </>
         )}
+      </div>
       </div>
       <PlaybackControls
         isPlaying={isPlaying}

@@ -66,7 +66,7 @@ export function AccessibleDataView({
   centralBodyLabel = 'Earth',
 }: AccessibleDataViewProps) {
   return (
-    <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2">
+    <div className="relative z-10 lg:absolute lg:top-4 lg:left-1/2 lg:-translate-x-1/2">
       <button
         type="button"
         onClick={onToggle}
@@ -80,7 +80,7 @@ export function AccessibleDataView({
       {isOpen && (
         <table
           id="accessible-data-table"
-          className="mt-2 rounded-lg bg-slate-900/90 p-3 text-xs backdrop-blur"
+          className="mt-2 block max-h-[70vh] max-w-[calc(100vw-2rem)] overflow-auto rounded-lg bg-slate-900/90 p-3 text-xs backdrop-blur"
         >
           <caption className="mb-1 text-left text-sm font-semibold text-slate-100">
             Live orbit data

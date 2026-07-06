@@ -91,7 +91,7 @@ export function GroundTrackView({ tracks, subsolarPoint }: GroundTrackViewProps)
 
   return (
     <div
-      className="relative w-80 max-w-[80vw] overflow-hidden rounded-lg bg-slate-900/80 backdrop-blur"
+      className="relative w-full lg:w-80 lg:max-w-[80vw] overflow-hidden rounded-lg bg-slate-900/80 backdrop-blur"
       style={{ aspectRatio: '2 / 1' }}
     >
       <img

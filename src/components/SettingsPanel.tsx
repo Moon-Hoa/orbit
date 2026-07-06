@@ -53,7 +53,7 @@ export function SettingsPanel({
         aria-expanded={isOpen}
         aria-haspopup="true"
         aria-label="Settings"
-        className="rounded bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+        className="flex min-h-11 min-w-11 items-center justify-center rounded bg-slate-800 text-sm text-slate-200 hover:bg-slate-700"
       >
         ⚙
       </button>

@@ -4,7 +4,7 @@ import type { SpacecraftTransit } from '../solarSystem'
 import type { MarkerScreenPosition } from '../three/markerScreenPosition'
 import { SpacecraftTooltip } from './SpacecraftTooltip'
 
-const visiblePosition: MarkerScreenPosition = { xPx: 120, yPx: 80, occluded: false }
+const visiblePosition: MarkerScreenPosition = { xPx: 400, yPx: 80, occluded: false }
 
 const perseverance: SpacecraftTransit = {
   id: 'mars-2020-perseverance',
@@ -39,7 +39,15 @@ describe('SpacecraftTooltip', () => {
     renderTooltip()
     const name = screen.getByText('Perseverance (Mars 2020)')
     const popup = name.closest('div')!
-    expect(popup).toHaveStyle({ left: '120px', top: '80px' })
+    expect(popup).toHaveStyle({ left: '400px', top: '80px' })
+  })
+
+  it('clamps horizontally so it stays on-screen when the marker is near the viewport edge', () => {
+    renderTooltip({ position: { xPx: 5, yPx: 80, occluded: false } })
+    const name = screen.getByText('Perseverance (Mars 2020)')
+    const popup = name.closest('div')!
+    expect(popup).not.toHaveStyle({ left: '5px' })
+    expect(Number.parseFloat(getComputedStyle(popup).left)).toBeGreaterThan(5)
   })
 
   it('shows the mission name, agency, transit dates (in UTC, matching the plain calendar-date data), and description', () => {

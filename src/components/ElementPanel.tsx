@@ -37,7 +37,7 @@ export function ElementPanel({
   const perigeeAltitudeKm = elements.semiMajorAxisKm * (1 - elements.eccentricity) - bodyRadiusKm
 
   return (
-    <div className="absolute top-4 left-4 flex w-72 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 backdrop-blur">
+    <div className="relative flex max-h-[45vh] w-full flex-col gap-2 overflow-y-auto rounded-lg bg-slate-900/80 p-3 backdrop-blur lg:absolute lg:top-4 lg:left-4 lg:w-72 lg:max-w-[calc(100vw-2rem)]">
       <h2 className="mb-1 text-sm font-semibold text-slate-100">Orbital elements</h2>
       <PresetSelector
         onSelect={onSelectPreset}
