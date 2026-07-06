@@ -10,8 +10,15 @@ import {
   type Vector3,
   geodeticToEcefDirection,
   magnitude,
+  propagateToStateVector,
   scale,
 } from '../engine'
+import {
+  CENTRAL_BODY_ORBITERS,
+  CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES,
+  type Orbiter,
+  type SurfaceObject,
+} from '../celestialObjects'
 import { GROUND_STATION_CATEGORIES, type GroundStation } from '../groundStations'
 import { type TleRecord, fetchActiveSatellites, shadowFractionAt, solarSubpointAt } from '../satellite'
 import { type ClosestApproachResult, findClosestApproach } from './closestApproach'
@@ -28,6 +35,9 @@ import { disposeObject3D } from './disposeObject3D'
 import type { OrbitSource } from './OrbitSource'
 import { RealSatelliteSource } from './RealSatelliteSource'
 import { SatelliteSwarm } from './SatelliteSwarm'
+
+/** Marker color for active-orbiter markers (Moon/Mars), distinct from the primary/companion marker palette. */
+export const ORBITER_MARKER_COLOR = 0xfacc15
 
 /** Builds the mesh for a given central body id. */
 function createCentralBodyMesh(id: CentralBodyId): THREE.Mesh {
@@ -87,6 +97,11 @@ export interface GroundStationSelection {
   categoryLabel: string
 }
 
+/** A celestial surface object or active orbiter the user clicked (Moon/Mars only). */
+export type CelestialObjectSelection =
+  | { kind: 'surface'; object: SurfaceObject; categoryId: string; categoryLabel: string }
+  | { kind: 'orbiter'; object: Orbiter }
+
 /** How often (wall-clock ms) ground tracks are recomputed and reported. */
 const GROUND_TRACK_REPORT_INTERVAL_MS = 200
 /** How many trailing orbital periods the ground track window covers. */
@@ -111,6 +126,8 @@ export interface OrbitSceneOptions {
   onAutoPause?: () => void
   /** Called when the user clicks a visible ground station pin. */
   onGroundStationSelect?: (selection: GroundStationSelection) => void
+  /** Called when the user clicks a visible celestial surface object pin or orbiter marker. */
+  onCelestialObjectSelect?: (selection: CelestialObjectSelection) => void
 }
 
 interface TrackedObject {
@@ -129,6 +146,21 @@ interface GroundStationCategoryState {
   group: THREE.Group
   pinsByStationId: Map<string, THREE.Mesh>
   visible: boolean
+}
+
+interface CelestialSurfaceCategoryState {
+  categoryId: string
+  categoryLabel: string
+  objectsById: Map<string, SurfaceObject>
+  material: THREE.MeshBasicMaterial
+  group: THREE.Group
+  pinsByObjectId: Map<string, THREE.Mesh>
+  visible: boolean
+}
+
+interface CelestialOrbiterState {
+  orbiter: Orbiter
+  marker: THREE.Mesh
 }
 
 /** How far the pointer can move between down/up and still count as a click (not a camera drag), in CSS pixels. */
@@ -163,9 +195,13 @@ export class OrbitScene {
   private readonly onClosestApproachUpdate?: (result: ClosestApproachResult | null) => void
   private readonly onAutoPause?: () => void
   private readonly onGroundStationSelect?: (selection: GroundStationSelection) => void
+  private readonly onCelestialObjectSelect?: (selection: CelestialObjectSelection) => void
   private readonly sun: THREE.DirectionalLight
   private readonly raycaster = new THREE.Raycaster()
   private readonly groundStationCategories = new Map<string, GroundStationCategoryState>()
+  private readonly celestialObjectCategories = new Map<string, CelestialSurfaceCategoryState>()
+  private readonly celestialOrbiters = new Map<string, CelestialOrbiterState>()
+  private celestialOrbitersVisible = false
   private pointerDownPosition: { x: number; y: number } | null = null
   private satelliteSwarm: SatelliteSwarm | null = null
   private satelliteSwarmVisible = false
@@ -196,6 +232,7 @@ export class OrbitScene {
     this.onClosestApproachUpdate = options.onClosestApproachUpdate
     this.onAutoPause = options.onAutoPause
     this.onGroundStationSelect = options.onGroundStationSelect
+    this.onCelestialObjectSelect = options.onCelestialObjectSelect
     this.scene = new THREE.Scene()
 
     this.centralBodyId = options.initialCentralBody ?? DEFAULT_CENTRAL_BODY_ID
@@ -239,6 +276,8 @@ export class OrbitScene {
 
     this.centralBodyMesh = createCentralBodyMesh(this.centralBodyId)
     this.scene.add(this.centralBodyMesh)
+
+    this.rebuildCelestialObjects(this.centralBodyId)
 
     for (const category of GROUND_STATION_CATEGORIES) {
       const material = createGroundStationPinMaterial(category.color)
@@ -389,6 +428,8 @@ export class OrbitScene {
     this.centralBodyMesh = createCentralBodyMesh(id)
     this.scene.add(this.centralBodyMesh)
 
+    this.rebuildCelestialObjects(id)
+
     for (const [objectId, object] of this.objects) {
       if (!(object.source instanceof DesignOrbitSource)) continue
       const reanchored = new DesignOrbitSource(
@@ -401,6 +442,72 @@ export class OrbitScene {
     }
 
     this.syncToCurrentState(true)
+  }
+
+  /**
+   * Rebuilds the celestial surface-object pins and active-orbiter markers for
+   * `bodyId`, disposing whatever the previous body had. Earth has no entries
+   * in `CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES`/`CENTRAL_BODY_ORBITERS`, so
+   * this is effectively a no-op (beyond clearing) when switching to Earth.
+   * Surface pins reuse the same shared-geometry pin as ground stations
+   * (`createGroundStationPin`); orbiter markers reuse `createSatelliteMarker`.
+   * Must run after `centralBodyRadiusKm` and the scene's km-to-scene-units
+   * scale are already updated for `bodyId`, since pin positions are computed
+   * here using both.
+   */
+  private rebuildCelestialObjects(bodyId: CentralBodyId): void {
+    for (const state of this.celestialObjectCategories.values()) {
+      this.scene.remove(state.group)
+      disposeObject3D(state.group)
+    }
+    this.celestialObjectCategories.clear()
+
+    for (const state of this.celestialOrbiters.values()) {
+      this.scene.remove(state.marker)
+      disposeObject3D(state.marker)
+    }
+    this.celestialOrbiters.clear()
+
+    for (const category of CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES[bodyId]) {
+      const material = createGroundStationPinMaterial(category.color)
+      const group = new THREE.Group()
+      group.name = `celestial-objects-${category.id}`
+      group.visible = false
+
+      const objectsById = new Map<string, SurfaceObject>()
+      const pinsByObjectId = new Map<string, THREE.Mesh>()
+      for (const object of category.objects) {
+        const pin = createGroundStationPin(material)
+        const ecefDirection = geodeticToEcefDirection({
+          latitudeRad: object.latitudeDeg * DEG_TO_RAD,
+          longitudeRad: object.longitudeDeg * DEG_TO_RAD,
+          altitudeKm: 0,
+        })
+        pin.position.copy(eciToScene(scale(ecefDirection, this.centralBodyRadiusKm)))
+        group.add(pin)
+        objectsById.set(object.id, object)
+        pinsByObjectId.set(object.id, pin)
+      }
+      this.scene.add(group)
+
+      this.celestialObjectCategories.set(category.id, {
+        categoryId: category.id,
+        categoryLabel: category.label,
+        objectsById,
+        material,
+        group,
+        pinsByObjectId,
+        visible: false,
+      })
+    }
+
+    for (const orbiter of CENTRAL_BODY_ORBITERS[bodyId]) {
+      const marker = createSatelliteMarker(ORBITER_MARKER_COLOR)
+      marker.visible = this.celestialOrbitersVisible
+      this.scene.add(marker)
+      this.celestialOrbiters.set(orbiter.id, { orbiter, marker })
+    }
+    if (this.celestialOrbitersVisible) this.updateCelestialOrbiterPositions()
   }
 
   /** Stops tracking a companion object. No-ops for the primary object or an unknown id. */
@@ -556,6 +663,35 @@ export class OrbitScene {
     if (visible) this.updateGroundStationPins()
   }
 
+  /** Shows or hides every pin in a celestial surface-object category. No-ops for an unknown category id. */
+  setCelestialObjectCategoryVisible(categoryId: string, visible: boolean): void {
+    const state = this.celestialObjectCategories.get(categoryId)
+    if (!state) return
+    state.visible = visible
+    state.group.visible = visible
+  }
+
+  /** Shows or hides the active-orbiter markers for the currently-selected body. */
+  setCelestialOrbitersVisible(visible: boolean): void {
+    this.celestialOrbitersVisible = visible
+    for (const state of this.celestialOrbiters.values()) {
+      state.marker.visible = visible
+    }
+    if (visible) this.updateCelestialOrbiterPositions()
+  }
+
+  /** Repositions every active-orbiter marker at the current sim time, using the current body's `mu`. */
+  private updateCelestialOrbiterPositions(): void {
+    for (const state of this.celestialOrbiters.values()) {
+      const orbiterState = propagateToStateVector(
+        state.orbiter.elements,
+        this.simTimeSeconds,
+        this.centralBodyMuKm3S2,
+      )
+      state.marker.position.copy(eciToScene(orbiterState.position))
+    }
+  }
+
   /**
    * Shows or hides the "all satellites currently in orbit" background swarm - a single
    * `THREE.Points` cloud (see `SatelliteSwarm`), not individually trackable like the companion
@@ -618,6 +754,12 @@ export class OrbitScene {
     for (const state of this.groundStationCategories.values()) {
       if (state.visible) visiblePins.push(...state.pinsByStationId.values())
     }
+    for (const state of this.celestialObjectCategories.values()) {
+      if (state.visible) visiblePins.push(...state.pinsByObjectId.values())
+    }
+    if (this.celestialOrbitersVisible) {
+      for (const state of this.celestialOrbiters.values()) visiblePins.push(state.marker)
+    }
     if (visiblePins.length === 0) return
 
     this.raycaster.setFromCamera(this.pointerToNdc(event), this.camera)
@@ -637,6 +779,25 @@ export class OrbitScene {
         return
       }
     }
+    for (const state of this.celestialObjectCategories.values()) {
+      for (const [objectId, pin] of state.pinsByObjectId) {
+        if (pin !== hit.object) continue
+        const object = state.objectsById.get(objectId)
+        if (!object) return
+        this.onCelestialObjectSelect?.({
+          kind: 'surface',
+          object,
+          categoryId: state.categoryId,
+          categoryLabel: state.categoryLabel,
+        })
+        return
+      }
+    }
+    for (const state of this.celestialOrbiters.values()) {
+      if (state.marker !== hit.object) continue
+      this.onCelestialObjectSelect?.({ kind: 'orbiter', object: state.orbiter })
+      return
+    }
   }
 
   /** Repositions every tracked object at the current sim time, and reports focused-object stats/ground tracks. */
@@ -644,6 +805,7 @@ export class OrbitScene {
     const currentDate = new Date(this.referenceDate.getTime() + this.simTimeSeconds * 1000)
     this.sun.position.copy(this.sunDirectionInScene(currentDate))
     if (this.satelliteSwarmVisible) this.satelliteSwarm?.update(currentDate)
+    if (this.celestialOrbitersVisible) this.updateCelestialOrbiterPositions()
 
     let focusedAltitudeKm: number | null = null
     let focusedSpeedKmS: number | null = null

@@ -22,11 +22,17 @@ import {
   nextCompanionColor,
 } from './companions'
 import type { ClosestApproachResult } from '../three/closestApproach'
-import { type GroundStationSelection, OrbitScene, PRIMARY_OBJECT_ID } from '../three/OrbitScene'
+import {
+  type CelestialObjectSelection,
+  type GroundStationSelection,
+  OrbitScene,
+  PRIMARY_OBJECT_ID,
+} from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { AccessibleDataView } from './AccessibleDataView'
 import { AllSatellitesToggle } from './AllSatellitesToggle'
+import { CelestialObjectLayerPanel } from './CelestialObjectLayerPanel'
 import { CentralBodySelector } from './CentralBodySelector'
 import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
@@ -128,6 +134,12 @@ export function OrbitViewer() {
     longitudeDeg: number
     nonce: number
   } | null>(null)
+  const [visibleCelestialCategories, setVisibleCelestialCategories] = useState(
+    () => new Set<string>(),
+  )
+  const [celestialOrbitersVisible, setCelestialOrbitersVisible] = useState(false)
+  const [celestialObjectSelection, setCelestialObjectSelection] =
+    useState<CelestialObjectSelection | null>(null)
 
   /** Posts a message to the visually-hidden aria-live region, for screen readers. */
   function announce(message: string) {
@@ -259,6 +271,7 @@ export function OrbitViewer() {
       onClosestApproachUpdate: setClosestApproach,
       onAutoPause: () => setIsPlaying(false),
       onGroundStationSelect: setGroundStationSelection,
+      onCelestialObjectSelect: setCelestialObjectSelection,
     })
     sceneRef.current = scene
     scene.start()
@@ -460,10 +473,27 @@ export function OrbitViewer() {
     return sceneRef.current?.setSatelliteSwarmVisible(visible) ?? Promise.resolve()
   }
 
+  function toggleCelestialObjectCategory(categoryId: string, visible: boolean) {
+    sceneRef.current?.setCelestialObjectCategoryVisible(categoryId, visible)
+    setVisibleCelestialCategories((prev) => {
+      const next = new Set(prev)
+      if (visible) next.add(categoryId)
+      else next.delete(categoryId)
+      return next
+    })
+  }
+
+  function setOrbitersVisible(visible: boolean) {
+    sceneRef.current?.setCelestialOrbitersVisible(visible)
+    setCelestialOrbitersVisible(visible)
+  }
+
   /**
    * Switches the scene's central body. Real-satellite tracking is Earth-only
    * (no Moon/Mars catalog), so switching away from Earth while tracking one
-   * falls back to design-orbit mode with the current elements.
+   * falls back to design-orbit mode with the current elements. Surface-object
+   * category visibility and the selected pin/marker info are reset, since
+   * each body has its own distinct catalog and category ids.
    */
   function changeCentralBody(id: CentralBodyId) {
     markDiscreteChange()
@@ -472,6 +502,8 @@ export function OrbitViewer() {
       setSelectedTle(null)
     }
     setCentralBodyId(id)
+    setVisibleCelestialCategories(new Set())
+    setCelestialObjectSelection(null)
     announce(`${CENTRAL_BODIES[id].label} selected`)
   }
 
@@ -567,7 +599,7 @@ export function OrbitViewer() {
             disableTrackReal={!currentBody.hasEarthOnlyFeatures}
           />
           <ShareButton getShareUrl={getShareUrl} />
-          {currentBody.hasEarthOnlyFeatures && (
+          {currentBody.hasEarthOnlyFeatures ? (
             <>
               <AllSatellitesToggle onToggle={setSatelliteSwarmVisible} />
               <GroundStationLayerPanel
@@ -577,6 +609,15 @@ export function OrbitViewer() {
                 onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
               />
             </>
+          ) : (
+            <CelestialObjectLayerPanel
+              centralBody={centralBodyId}
+              visibleCategoryIds={visibleCelestialCategories}
+              onToggleCategory={toggleCelestialObjectCategory}
+              orbitersVisible={celestialOrbitersVisible}
+              onToggleOrbiters={setOrbitersVisible}
+              selection={celestialObjectSelection}
+            />
           )}
           <SettingsPanel unitSystem={unitSystem} onUnitSystemChange={setUnitSystem} />
         </div>
