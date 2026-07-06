@@ -39,6 +39,8 @@ interface AccessibleDataViewProps {
   currentSpeedRef: RefObject<HTMLTableCellElement | null>
   currentEclipseStatusRef: RefObject<HTMLTableCellElement | null>
   showEclipseStatus: boolean
+  /** The selected central body's display name (Earth, Moon, Mars). Defaults to "Earth". */
+  centralBodyLabel?: string
 }
 
 /**
@@ -61,6 +63,7 @@ export function AccessibleDataView({
   currentSpeedRef,
   currentEclipseStatusRef,
   showEclipseStatus,
+  centralBodyLabel = 'Earth',
 }: AccessibleDataViewProps) {
   return (
     <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2">
@@ -83,6 +86,7 @@ export function AccessibleDataView({
             Live orbit data
           </caption>
           <tbody>
+            <DataRow label="Central body" value={centralBodyLabel} />
             <DataRow label="Mode" value={mode === 'design' ? 'Design orbit' : 'Track real satellite'} />
             <DataRow
               label="Tracked object"

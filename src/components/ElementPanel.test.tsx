@@ -72,4 +72,21 @@ describe('ElementPanel', () => {
     fireEvent.click(screen.getByLabelText(/Enable J2 perturbation/))
     expect(onEnableJ2Change).toHaveBeenCalledWith(true)
   })
+
+  it('names the selected body in the perigee warning (see Moon/Mars view issues)', () => {
+    const decayedElements: OrbitalElements = { ...baseElements, semiMajorAxisKm: 1500 }
+    renderPanel({ elements: decayedElements, bodyRadiusKm: 1737.4, bodyLabel: 'Moon' })
+    expect(screen.getByText(/orbit intersects Moon/)).toBeInTheDocument()
+    expect(screen.queryByText(/orbit intersects Earth/)).not.toBeInTheDocument()
+  })
+
+  it('lowers the semi-major-axis slider floor to the selected body radius', () => {
+    renderPanel({ bodyRadiusKm: 1737.4 })
+    expect(screen.getByLabelText('a slider')).toHaveAttribute('min', String(1737.4 + 200))
+  })
+
+  it('renders no presets when given an empty presets list (e.g. a non-Earth body)', () => {
+    renderPanel({ presets: [] })
+    expect(screen.queryByRole('button', { name: 'ISS' })).not.toBeInTheDocument()
+  })
 })

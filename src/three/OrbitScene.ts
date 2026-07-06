@@ -1,6 +1,9 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import {
+  CENTRAL_BODIES,
+  type CentralBodyId,
+  DEFAULT_CENTRAL_BODY_ID,
   EARTH_RADIUS_KM,
   type GeodeticCoordinates,
   type OrbitalElements,
@@ -12,9 +15,11 @@ import {
 import { GROUND_STATION_CATEGORIES, type GroundStation } from '../groundStations'
 import { type TleRecord, fetchActiveSatellites, shadowFractionAt, solarSubpointAt } from '../satellite'
 import { type ClosestApproachResult, findClosestApproach } from './closestApproach'
-import { EARTH_RADIUS_SCENE_UNITS } from './constants'
+import { CENTRAL_BODY_RADIUS_SCENE_UNITS, setCentralBodyRadiusKm } from './constants'
 import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
+import { createMars } from './createMars'
+import { createMoon } from './createMoon'
 import { DEFAULT_ORBIT_PATH_COLOR, createOrbitPath } from './createOrbitPath'
 import { DEFAULT_MARKER_COLOR, createSatelliteMarker } from './createSatelliteMarker'
 import { createGroundStationPin, createGroundStationPinMaterial } from './createGroundStationPin'
@@ -23,6 +28,18 @@ import { disposeObject3D } from './disposeObject3D'
 import type { OrbitSource } from './OrbitSource'
 import { RealSatelliteSource } from './RealSatelliteSource'
 import { SatelliteSwarm } from './SatelliteSwarm'
+
+/** Builds the mesh for a given central body id. */
+function createCentralBodyMesh(id: CentralBodyId): THREE.Mesh {
+  switch (id) {
+    case 'earth':
+      return createEarth()
+    case 'moon':
+      return createMoon()
+    case 'mars':
+      return createMars()
+  }
+}
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -81,6 +98,8 @@ export interface OrbitSceneOptions {
   initialElements: OrbitalElements
   /** Whether the initial design orbit starts with J2 secular drift enabled. Defaults to false. */
   initialEnableJ2?: boolean
+  /** Which body the scene is centered on. Defaults to Earth. */
+  initialCentralBody?: CentralBodyId
   initialCamera?: CameraState
   onTick?: (info: TickInfo) => void
   onGroundTrackUpdate?: (tracks: GroundTrackForObject[]) => void
@@ -153,6 +172,10 @@ export class OrbitScene {
   private satelliteSwarmLoadPromise: Promise<void> | null = null
 
   private readonly objects = new Map<string, TrackedObject>()
+  private centralBodyId: CentralBodyId
+  private centralBodyMesh: THREE.Mesh
+  private centralBodyMuKm3S2: number
+  private centralBodyRadiusKm: number
   private focusedObjectId: string = PRIMARY_OBJECT_ID
   private simTimeSeconds = 0
   private isPlaying = false
@@ -175,6 +198,12 @@ export class OrbitScene {
     this.onGroundStationSelect = options.onGroundStationSelect
     this.scene = new THREE.Scene()
 
+    this.centralBodyId = options.initialCentralBody ?? DEFAULT_CENTRAL_BODY_ID
+    const centralBodyInfo = CENTRAL_BODIES[this.centralBodyId]
+    this.centralBodyMuKm3S2 = centralBodyInfo.muKm3S2
+    this.centralBodyRadiusKm = centralBodyInfo.radiusKm
+    setCentralBodyRadiusKm(centralBodyInfo.radiusKm)
+
     this.camera = new THREE.PerspectiveCamera(50, this.aspectRatio, 0.1, 1000)
     const initialCameraPosition = options.initialCamera?.position
     if (initialCameraPosition) {
@@ -184,7 +213,7 @@ export class OrbitScene {
         initialCameraPosition.z,
       )
     } else {
-      this.camera.position.set(0, EARTH_RADIUS_SCENE_UNITS * 2, EARTH_RADIUS_SCENE_UNITS * 5)
+      this.camera.position.set(0, CENTRAL_BODY_RADIUS_SCENE_UNITS * 2, CENTRAL_BODY_RADIUS_SCENE_UNITS * 5)
     }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -195,8 +224,8 @@ export class OrbitScene {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
     this.controls.enablePan = false
-    this.controls.minDistance = EARTH_RADIUS_SCENE_UNITS * 1.2
-    this.controls.maxDistance = EARTH_RADIUS_SCENE_UNITS * 15
+    this.controls.minDistance = CENTRAL_BODY_RADIUS_SCENE_UNITS * 1.2
+    this.controls.maxDistance = CENTRAL_BODY_RADIUS_SCENE_UNITS * 15
     const initialCameraTarget = options.initialCamera?.target
     if (initialCameraTarget) {
       this.controls.target.set(initialCameraTarget.x, initialCameraTarget.y, initialCameraTarget.z)
@@ -208,7 +237,8 @@ export class OrbitScene {
     this.sun.position.copy(this.sunDirectionInScene(this.referenceDate))
     this.scene.add(this.sun)
 
-    this.scene.add(createEarth())
+    this.centralBodyMesh = createCentralBodyMesh(this.centralBodyId)
+    this.scene.add(this.centralBodyMesh)
 
     for (const category of GROUND_STATION_CATEGORIES) {
       const material = createGroundStationPinMaterial(category.color)
@@ -243,7 +273,11 @@ export class OrbitScene {
     this.objects.set(
       PRIMARY_OBJECT_ID,
       this.createTrackedObject(
-        new DesignOrbitSource(options.initialElements, options.initialEnableJ2 ?? false),
+        new DesignOrbitSource(
+          options.initialElements,
+          options.initialEnableJ2 ?? false,
+          this.centralBodyMuKm3S2,
+        ),
         DEFAULT_ORBIT_PATH_COLOR,
         DEFAULT_MARKER_COLOR,
       ),
@@ -297,16 +331,24 @@ export class OrbitScene {
 
   /** Switches to (or updates) the primary user-designed two-body orbit. Keeps the current sim time. */
   setDesignElements(elements: OrbitalElements, enableJ2 = false): void {
-    this.replacePrimary(new DesignOrbitSource(elements, enableJ2), false)
+    this.replacePrimary(new DesignOrbitSource(elements, enableJ2, this.centralBodyMuKm3S2), false)
   }
 
-  /** Switches the primary object to tracking a real satellite via its TLE, starting the clock fresh at "now". */
+  /**
+   * Switches the primary object to tracking a real satellite via its TLE,
+   * starting the clock fresh at "now". No-ops when a non-Earth body is
+   * selected - Celestrak has no Moon/Mars catalog, so the UI shouldn't call
+   * this outside Earth, but this guard keeps the scene consistent even if it
+   * does.
+   */
   setRealSatellite(tle: TleRecord): void {
+    if (this.centralBodyId !== 'earth') return
     this.replacePrimary(new RealSatelliteSource(tle, new Date()), true)
   }
 
-  /** Adds an additional real satellite alongside the primary object. No-ops if `id` is already tracked. */
+  /** Adds an additional real satellite alongside the primary object. No-ops if `id` is already tracked, or if a non-Earth body is selected (see `setRealSatellite`). */
   addRealSatelliteCompanion(id: string, tle: TleRecord, color: number): void {
+    if (this.centralBodyId !== 'earth') return
     if (this.objects.has(id)) return
     this.objects.set(id, this.createTrackedObject(new RealSatelliteSource(tle, new Date()), color, color))
     this.syncToCurrentState(true)
@@ -315,7 +357,49 @@ export class OrbitScene {
   /** Adds an additional design orbit alongside the primary object. No-ops if `id` is already tracked. */
   addDesignCompanion(id: string, elements: OrbitalElements, color: number): void {
     if (this.objects.has(id)) return
-    this.objects.set(id, this.createTrackedObject(new DesignOrbitSource(elements), color, color))
+    this.objects.set(
+      id,
+      this.createTrackedObject(
+        new DesignOrbitSource(elements, false, this.centralBodyMuKm3S2),
+        color,
+        color,
+      ),
+    )
+    this.syncToCurrentState(true)
+  }
+
+  /**
+   * Switches the scene's central body, swapping its mesh, repointing the
+   * scene's km-to-scene-units scale, and re-anchoring every currently-tracked
+   * design orbit to the new body's `mu` (so period/velocity reflect it going
+   * forward - the drawn path shape doesn't depend on `mu`, so it's unchanged).
+   * Real-satellite objects (Earth-only) are left as-is; the UI is expected to
+   * only add those while Earth is selected (see `setRealSatellite`).
+   */
+  setCentralBody(id: CentralBodyId): void {
+    if (id === this.centralBodyId) return
+    const info = CENTRAL_BODIES[id]
+    this.centralBodyId = id
+    this.centralBodyMuKm3S2 = info.muKm3S2
+    this.centralBodyRadiusKm = info.radiusKm
+    setCentralBodyRadiusKm(info.radiusKm)
+
+    this.scene.remove(this.centralBodyMesh)
+    disposeObject3D(this.centralBodyMesh)
+    this.centralBodyMesh = createCentralBodyMesh(id)
+    this.scene.add(this.centralBodyMesh)
+
+    for (const [objectId, object] of this.objects) {
+      if (!(object.source instanceof DesignOrbitSource)) continue
+      const reanchored = new DesignOrbitSource(
+        object.source.getElements(),
+        object.source.getEnableJ2(),
+        info.muKm3S2,
+      )
+      this.disposeTrackedObject(object)
+      this.objects.set(objectId, this.createTrackedObject(reanchored, object.pathColor, object.markerColor))
+    }
+
     this.syncToCurrentState(true)
   }
 
@@ -458,8 +542,13 @@ export class OrbitScene {
     }
   }
 
-  /** Shows or hides every pin in a ground station category. No-ops for an unknown category id. */
+  /**
+   * Shows or hides every pin in a ground station category. No-ops for an
+   * unknown category id, or if a non-Earth body is selected (ground stations
+   * are real Earth facilities, meaningless around the Moon/Mars in v1).
+   */
   setGroundStationCategoryVisible(categoryId: string, visible: boolean): void {
+    if (this.centralBodyId !== 'earth') return
     const state = this.groundStationCategories.get(categoryId)
     if (!state) return
     state.visible = visible
@@ -474,8 +563,10 @@ export class OrbitScene {
    * catalog (~16,000 objects as of writing) - callers should show their own loading UI while the
    * returned promise is pending. Rejects (leaving the swarm hidden) if that fetch fails and
    * nothing is cached yet; a later retry (calling this again) will attempt the fetch again.
+   * No-ops if a non-Earth body is selected (this catalog is Earth-only).
    */
   async setSatelliteSwarmVisible(visible: boolean): Promise<void> {
+    if (this.centralBodyId !== 'earth') return
     this.satelliteSwarmVisible = visible
     if (!visible) {
       this.satelliteSwarm?.setVisible(false)
@@ -567,7 +658,7 @@ export class OrbitScene {
       if (id === this.focusedObjectId) {
         const period = object.source.getPeriodSeconds()
         focusedWrappedSimTime = ((this.simTimeSeconds % period) + period) % period
-        focusedAltitudeKm = magnitude(state.position) - EARTH_RADIUS_KM
+        focusedAltitudeKm = magnitude(state.position) - this.centralBodyRadiusKm
         focusedSpeedKmS = magnitude(state.velocity)
       }
 

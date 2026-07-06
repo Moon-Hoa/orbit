@@ -70,6 +70,20 @@ describe('AccessibleDataView', () => {
     )
   })
 
+  it('defaults the central body row to Earth (see Moon/Mars view issues)', () => {
+    renderView({ isOpen: true })
+    expect(screen.getByRole('rowheader', { name: 'Central body' }).nextSibling).toHaveTextContent(
+      'Earth',
+    )
+  })
+
+  it('reflects an overridden central body label', () => {
+    renderView({ isOpen: true, centralBodyLabel: 'Moon' })
+    expect(screen.getByRole('rowheader', { name: 'Central body' }).nextSibling).toHaveTextContent(
+      'Moon',
+    )
+  })
+
   it('shows the tracked satellite identity and NORAD ID, without element sliders, in track-real mode', () => {
     renderView({
       isOpen: true,

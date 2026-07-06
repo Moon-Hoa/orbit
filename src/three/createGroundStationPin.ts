@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { EARTH_RADIUS_SCENE_UNITS } from './constants'
+import { CENTRAL_BODY_RADIUS_SCENE_UNITS } from './constants'
 
 /**
  * Shared geometry for every ground station pin, across all categories -
@@ -7,7 +7,7 @@ import { EARTH_RADIUS_SCENE_UNITS } from './constants'
  * per category, one material - see `createGroundStationPinMaterial`) keeps
  * that cheap instead of allocating unique GPU resources per pin.
  */
-const PIN_GEOMETRY = new THREE.SphereGeometry(EARTH_RADIUS_SCENE_UNITS * 0.014, 8, 8)
+const PIN_GEOMETRY = new THREE.SphereGeometry(CENTRAL_BODY_RADIUS_SCENE_UNITS * 0.014, 8, 8)
 
 /** Builds the (shareable, one-per-category) material for a category's pins. */
 export function createGroundStationPinMaterial(color: number): THREE.MeshBasicMaterial {

@@ -9,10 +9,17 @@ interface PresetSelectorProps {
   onAddCompanion?: (preset: Preset) => void
   /** Adds several presets as companions at once, if provided (alongside single-add via onAddCompanion). */
   onAddCompanionMany?: (presets: Preset[]) => BulkAddSummary
+  /** The presets to offer. Defaults to the full built-in list; pass `[]` when presets don't apply (e.g. a non-Earth central body). */
+  presets?: Preset[]
 }
 
 /** A row of buttons for loading a well-known orbit (ISS, GEO, Molniya, ...) instantly. */
-export function PresetSelector({ onSelect, onAddCompanion, onAddCompanionMany }: PresetSelectorProps) {
+export function PresetSelector({
+  onSelect,
+  onAddCompanion,
+  onAddCompanionMany,
+  presets = PRESETS,
+}: PresetSelectorProps) {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [summary, setSummary] = useState<BulkAddSummary | null>(null)
 
@@ -28,7 +35,7 @@ export function PresetSelector({ onSelect, onAddCompanion, onAddCompanionMany }:
 
   function handleAddSelected() {
     if (!onAddCompanionMany || checkedIds.size === 0) return
-    const selected = PRESETS.filter((preset) => checkedIds.has(preset.id))
+    const selected = presets.filter((preset) => checkedIds.has(preset.id))
     setSummary(onAddCompanionMany(selected))
     setCheckedIds(new Set())
   }
@@ -36,7 +43,7 @@ export function PresetSelector({ onSelect, onAddCompanion, onAddCompanionMany }:
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap gap-1">
-        {PRESETS.map((preset) => (
+        {presets.map((preset) => (
           <div key={preset.id} className="flex items-center gap-1 overflow-hidden rounded">
             {onAddCompanionMany && (
               <input

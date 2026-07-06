@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GeodeticCoordinates } from '../engine'
-import { orbitalPeriodSeconds } from '../engine'
-import { type Preset, type Scenario, decodeScenario, encodeScenario } from '../scenario'
+import {
+  CENTRAL_BODIES,
+  type CentralBodyId,
+  DEFAULT_CENTRAL_BODY_ID,
+  type GeodeticCoordinates,
+  orbitalPeriodSeconds,
+} from '../engine'
+import { type Preset, PRESETS, type Scenario, decodeScenario, encodeScenario } from '../scenario'
 import {
   type TleRecord,
   approximateElementsFromTle,
@@ -22,6 +27,7 @@ import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { AccessibleDataView } from './AccessibleDataView'
 import { AllSatellitesToggle } from './AllSatellitesToggle'
+import { CentralBodySelector } from './CentralBodySelector'
 import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
 import { ExportControls } from './ExportControls'
@@ -95,6 +101,9 @@ export function OrbitViewer() {
     initialScenario?.mode === 'design' ? initialScenario.elements : ISS_LIKE_ELEMENTS,
   )
   const [mode, setMode] = useState<ViewerMode>(() => initialScenario?.mode ?? 'design')
+  const [centralBodyId, setCentralBodyId] = useState<CentralBodyId>(
+    () => initialScenario?.centralBody ?? DEFAULT_CENTRAL_BODY_ID,
+  )
   const [selectedTle, setSelectedTle] = useState<TleRecord | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(
@@ -134,6 +143,7 @@ export function OrbitViewer() {
     localStorage.setItem(UNIT_SYSTEM_STORAGE_KEY, unitSystem)
   }, [unitSystem])
 
+  const currentBody = CENTRAL_BODIES[centralBodyId]
   const isTrackingReal = mode === 'track-real' && selectedTle !== null
 
   // Focus follows the primary object whenever it's replaced (a new search
@@ -146,15 +156,17 @@ export function OrbitViewer() {
 
   const periodSeconds = useMemo(() => {
     if (isTrackingReal) return orbitalPeriodSecondsFromTle(selectedTle, new Date())
-    return orbitalPeriodSeconds(elements.semiMajorAxisKm)
-  }, [isTrackingReal, selectedTle, elements.semiMajorAxisKm])
+    return orbitalPeriodSeconds(elements.semiMajorAxisKm, currentBody.muKm3S2)
+  }, [isTrackingReal, selectedTle, elements.semiMajorAxisKm, currentBody.muKm3S2])
 
   const focusedCompanion = companions.find((companion) => companion.id === focusedId)
 
   const primaryLabel = isTrackingReal ? selectedTle.name : 'Design orbit'
 
-  const currentGeodetic =
-    groundTracks.find((track) => track.id === PRIMARY_OBJECT_ID)?.points.at(-1) ?? null
+  // Ground-track/geodetic reporting assumes Earth's rotation - only meaningful when Earth is selected.
+  const currentGeodetic = currentBody.hasEarthOnlyFeatures
+    ? (groundTracks.find((track) => track.id === PRIMARY_OBJECT_ID)?.points.at(-1) ?? null)
+    : null
 
   const orbitShape = useMemo(() => {
     if (focusedCompanion) {
@@ -178,10 +190,16 @@ export function OrbitViewer() {
     if (mode === 'track-real' && !selectedTle) return null
     const camera = sceneRef.current?.getCameraState()
     if (mode === 'track-real' && selectedTle) {
-      return { mode: 'track-real', noradId: selectedTle.noradId, speedMultiplier, camera }
+      return {
+        mode: 'track-real',
+        noradId: selectedTle.noradId,
+        speedMultiplier,
+        centralBody: 'earth',
+        camera,
+      }
     }
-    return { mode: 'design', elements, speedMultiplier, camera }
-  }, [mode, selectedTle, elements, speedMultiplier])
+    return { mode: 'design', elements, speedMultiplier, centralBody: centralBodyId, camera }
+  }, [mode, selectedTle, elements, speedMultiplier, centralBodyId])
 
   // Mount once: create the scene and start its render loop. Later element/
   // playback/mode changes are pushed via the effects below, not by remounting.
@@ -191,6 +209,7 @@ export function OrbitViewer() {
 
     const scene = new OrbitScene(container, {
       initialElements: elements,
+      initialCentralBody: centralBodyId,
       initialCamera: initialScenario?.camera,
       onTick: ({ simTimeSeconds, altitudeKm, speedKmS, shadowFraction, currentDate }) => {
         if (scrubRef.current) scrubRef.current.value = String(simTimeSeconds)
@@ -268,6 +287,10 @@ export function OrbitViewer() {
   }, [mode, selectedTle, initialScenario])
 
   useEffect(() => {
+    sceneRef.current?.setCentralBody(centralBodyId)
+  }, [centralBodyId])
+
+  useEffect(() => {
     if (mode === 'design') sceneRef.current?.setDesignElements(elements, enableJ2)
   }, [elements, mode, enableJ2])
 
@@ -312,6 +335,7 @@ export function OrbitViewer() {
       isApplyingHistoryRef.current = true
       setMode(scenario.mode)
       setSpeedMultiplier(scenario.speedMultiplier)
+      setCentralBodyId(scenario.centralBody)
       if (scenario.mode === 'design') {
         setElements(scenario.elements)
         setSelectedTle(null)
@@ -436,6 +460,21 @@ export function OrbitViewer() {
     return sceneRef.current?.setSatelliteSwarmVisible(visible) ?? Promise.resolve()
   }
 
+  /**
+   * Switches the scene's central body. Real-satellite tracking is Earth-only
+   * (no Moon/Mars catalog), so switching away from Earth while tracking one
+   * falls back to design-orbit mode with the current elements.
+   */
+  function changeCentralBody(id: CentralBodyId) {
+    markDiscreteChange()
+    if (id !== 'earth' && mode === 'track-real') {
+      setMode('design')
+      setSelectedTle(null)
+    }
+    setCentralBodyId(id)
+    announce(`${CENTRAL_BODIES[id].label} selected`)
+  }
+
   function useGroundStationForPassPrediction() {
     if (!groundStationSelection) return
     setPassPredictionRequest((prev) => ({
@@ -463,6 +502,7 @@ export function OrbitViewer() {
         currentSpeedRef={dataViewSpeedRef}
         currentEclipseStatusRef={dataViewEclipseStatusRef}
         showEclipseStatus={isTrackingReal && focusedId === PRIMARY_OBJECT_ID}
+        centralBodyLabel={currentBody.label}
       />
 
       {mode === 'design' ? (
@@ -478,6 +518,9 @@ export function OrbitViewer() {
           onAddCompanionMany={addDesignCompanionsMany}
           enableJ2={enableJ2}
           onEnableJ2Change={setEnableJ2}
+          bodyRadiusKm={currentBody.radiusKm}
+          bodyLabel={currentBody.label}
+          presets={currentBody.hasEarthOnlyFeatures ? PRESETS : []}
         />
       ) : (
         <SatelliteSearch
@@ -504,13 +547,16 @@ export function OrbitViewer() {
           focusedId={focusedId}
           onFocus={focusObject}
           onRemoveCompanion={removeCompanion}
+          muKm3S2={currentBody.muKm3S2}
+          bodyRadiusKm={currentBody.radiusKm}
         />
         {companions.length === 1 && <ClosestApproachPanel result={closestApproach} />}
       </div>
       {isTrackingReal && <GroundStationPanel tle={selectedTle} presetLocation={passPredictionRequest} />}
-      {mode === 'design' && <HohmannPlanner />}
+      {mode === 'design' && currentBody.hasEarthOnlyFeatures && <HohmannPlanner />}
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
         <div className="flex gap-2">
+          <CentralBodySelector centralBody={centralBodyId} onChange={changeCentralBody} />
           <ModeToggle
             mode={mode}
             onChange={(nextMode) => {
@@ -518,25 +564,34 @@ export function OrbitViewer() {
               setMode(nextMode)
               announce(nextMode === 'design' ? 'Design orbit mode' : 'Track real satellite mode')
             }}
+            disableTrackReal={!currentBody.hasEarthOnlyFeatures}
           />
           <ShareButton getShareUrl={getShareUrl} />
-          <AllSatellitesToggle onToggle={setSatelliteSwarmVisible} />
-          <GroundStationLayerPanel
-            visibleCategoryIds={visibleGroundStationCategories}
-            onToggleCategory={toggleGroundStationCategory}
-            selection={groundStationSelection}
-            onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
-          />
+          {currentBody.hasEarthOnlyFeatures && (
+            <>
+              <AllSatellitesToggle onToggle={setSatelliteSwarmVisible} />
+              <GroundStationLayerPanel
+                visibleCategoryIds={visibleGroundStationCategories}
+                onToggleCategory={toggleGroundStationCategory}
+                selection={groundStationSelection}
+                onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
+              />
+            </>
+          )}
           <SettingsPanel unitSystem={unitSystem} onUnitSystemChange={setUnitSystem} />
         </div>
-        <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />
-        <ExportControls
-          label={primaryLabel}
-          isTrackingReal={isTrackingReal}
-          elements={elements}
-          enableJ2={enableJ2}
-          tle={selectedTle}
-        />
+        {currentBody.hasEarthOnlyFeatures && (
+          <>
+            <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />
+            <ExportControls
+              label={primaryLabel}
+              isTrackingReal={isTrackingReal}
+              elements={elements}
+              enableJ2={enableJ2}
+              tle={selectedTle}
+            />
+          </>
+        )}
       </div>
       <PlaybackControls
         isPlaying={isPlaying}

@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import { useMemo } from 'react'
-import { apogeeAltitudeKm, orbitalPeriodSeconds, perigeeAltitudeKm } from '../engine'
+import { EARTH_MU_KM3_S2, EARTH_RADIUS_KM, apogeeAltitudeKm, orbitalPeriodSeconds, perigeeAltitudeKm } from '../engine'
 import { PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import { type CompanionEntry, DEFAULT_PRIMARY_COLOR, colorToCss } from './companions'
 import { type UnitSystem, formatDistanceKm } from './distanceUnits'
@@ -86,6 +86,10 @@ interface StatsPanelProps {
   focusedId: string
   onFocus: (id: string) => void
   onRemoveCompanion: (id: string) => void
+  /** The selected central body's gravitational parameter, km^3/s^2. Defaults to Earth's. */
+  muKm3S2?: number
+  /** The selected central body's radius, km. Defaults to Earth's. */
+  bodyRadiusKm?: number
 }
 
 /**
@@ -106,20 +110,22 @@ export function StatsPanel({
   focusedId,
   onFocus,
   onRemoveCompanion,
+  muKm3S2 = EARTH_MU_KM3_S2,
+  bodyRadiusKm = EARTH_RADIUS_KM,
 }: StatsPanelProps) {
   const { semiMajorAxisKm, eccentricity } = orbitShape
 
   const periodMinutes = useMemo(
-    () => orbitalPeriodSeconds(semiMajorAxisKm) / 60,
-    [semiMajorAxisKm],
+    () => orbitalPeriodSeconds(semiMajorAxisKm, muKm3S2) / 60,
+    [semiMajorAxisKm, muKm3S2],
   )
   const apogeeKm = useMemo(
-    () => apogeeAltitudeKm(semiMajorAxisKm, eccentricity),
-    [semiMajorAxisKm, eccentricity],
+    () => apogeeAltitudeKm(semiMajorAxisKm, eccentricity, bodyRadiusKm),
+    [semiMajorAxisKm, eccentricity, bodyRadiusKm],
   )
   const perigeeKm = useMemo(
-    () => perigeeAltitudeKm(semiMajorAxisKm, eccentricity),
-    [semiMajorAxisKm, eccentricity],
+    () => perigeeAltitudeKm(semiMajorAxisKm, eccentricity, bodyRadiusKm),
+    [semiMajorAxisKm, eccentricity, bodyRadiusKm],
   )
 
   return (

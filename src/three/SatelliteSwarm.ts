@@ -1,11 +1,11 @@
 import * as THREE from 'three'
 import { type TleRecord, propagateAt, toSatRec } from '../satellite'
 import { eciToScene } from './coordinates'
-import { EARTH_RADIUS_SCENE_UNITS } from './constants'
+import { CENTRAL_BODY_RADIUS_SCENE_UNITS } from './constants'
 
 /** Dim, neutral color (Tailwind slate-400) - reads as a background layer, not a tracked object. */
 const POINT_COLOR = 0x94a3b8
-const POINT_SIZE = EARTH_RADIUS_SCENE_UNITS * 0.01
+const POINT_SIZE = CENTRAL_BODY_RADIUS_SCENE_UNITS * 0.01
 
 /**
  * Roughly how many `update()` calls (~animation frames, while active) it takes to refresh every

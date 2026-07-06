@@ -21,12 +21,18 @@ const camera: CameraState = {
 
 describe('encodeScenario / decodeScenario round trip', () => {
   it('round-trips a design scenario without camera state', () => {
-    const scenario: Scenario = { mode: 'design', elements: issElements, speedMultiplier: 60 }
+    const scenario: Scenario = {
+      mode: 'design',
+      elements: issElements,
+      speedMultiplier: 60,
+      centralBody: 'earth',
+    }
     const decoded = decodeScenario(encodeScenario(scenario))
 
     expect(decoded?.mode).toBe('design')
     if (decoded?.mode !== 'design') throw new Error('expected design mode')
     expect(decoded.speedMultiplier).toBe(60)
+    expect(decoded.centralBody).toBe('earth')
     expect(decoded.camera).toBeUndefined()
     expect(decoded.elements.semiMajorAxisKm).toBeCloseTo(issElements.semiMajorAxisKm, 5)
     expect(decoded.elements.eccentricity).toBeCloseTo(issElements.eccentricity, 5)
@@ -41,6 +47,7 @@ describe('encodeScenario / decodeScenario round trip', () => {
       mode: 'design',
       elements: issElements,
       speedMultiplier: 300,
+      centralBody: 'earth',
       camera,
     }
     const decoded = decodeScenario(encodeScenario(scenario))
@@ -51,18 +58,42 @@ describe('encodeScenario / decodeScenario round trip', () => {
     expect(decoded?.camera?.target).toEqual(camera.target)
   })
 
+  it('round-trips a design scenario centered on the Moon or Mars', () => {
+    for (const centralBody of ['moon', 'mars'] as const) {
+      const scenario: Scenario = {
+        mode: 'design',
+        elements: issElements,
+        speedMultiplier: 60,
+        centralBody,
+      }
+      const decoded = decodeScenario(encodeScenario(scenario))
+      expect(decoded?.centralBody, centralBody).toBe(centralBody)
+    }
+  })
+
   it('round-trips a track-real scenario', () => {
-    const scenario: Scenario = { mode: 'track-real', noradId: '25544', speedMultiplier: 60 }
+    const scenario: Scenario = {
+      mode: 'track-real',
+      noradId: '25544',
+      speedMultiplier: 60,
+      centralBody: 'earth',
+    }
     const decoded = decodeScenario(encodeScenario(scenario))
 
     expect(decoded).toEqual(scenario)
   })
 
   it('produces human-readable query params', () => {
-    const params = encodeScenario({ mode: 'track-real', noradId: '25544', speedMultiplier: 60 })
+    const params = encodeScenario({
+      mode: 'track-real',
+      noradId: '25544',
+      speedMultiplier: 60,
+      centralBody: 'earth',
+    })
     expect(params.get('mode')).toBe('track-real')
     expect(params.get('norad')).toBe('25544')
     expect(params.get('speed')).toBe('60')
+    expect(params.get('body')).toBe('earth')
   })
 })
 
@@ -101,6 +132,25 @@ describe('decodeScenario robustness', () => {
       params.delete(field)
       expect(decodeScenario(params), `missing ${field}`).toBeNull()
     }
+  })
+
+  it('defaults centralBody to earth when the body param is missing or unrecognized', () => {
+    const missing = decodeScenario(
+      new URLSearchParams('mode=design&speed=60&a=6786&e=0&i=0&raan=0&argp=0&nu=0'),
+    )
+    expect(missing?.centralBody).toBe('earth')
+
+    const bogus = decodeScenario(
+      new URLSearchParams('mode=design&speed=60&a=6786&e=0&i=0&raan=0&argp=0&nu=0&body=jupiter'),
+    )
+    expect(bogus?.centralBody).toBe('earth')
+  })
+
+  it('forces centralBody to earth for track-real mode even if body says otherwise', () => {
+    const decoded = decodeScenario(
+      new URLSearchParams('mode=track-real&norad=25544&speed=60&body=moon'),
+    )
+    expect(decoded?.centralBody).toBe('earth')
   })
 
   it('ignores malformed camera state rather than failing the whole scenario', () => {

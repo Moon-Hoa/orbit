@@ -21,6 +21,7 @@ const syncToNowMock = vi.fn()
 const setPlaybackCapMock = vi.fn()
 const setGroundStationCategoryVisibleMock = vi.fn()
 const setSatelliteSwarmVisibleMock = vi.fn()
+const setCentralBodyMock = vi.fn()
 
 let capturedOptions: OrbitSceneOptions | null = null
 
@@ -53,6 +54,7 @@ vi.mock('../three/OrbitScene', async (importOriginal) => {
         setPlaybackCap: setPlaybackCapMock,
         setGroundStationCategoryVisible: setGroundStationCategoryVisibleMock,
         setSatelliteSwarmVisible: setSatelliteSwarmVisibleMock,
+        setCentralBody: setCentralBodyMock,
       })
     }),
   }
@@ -834,5 +836,70 @@ describe('OrbitViewer all satellites', () => {
       'aria-pressed',
       'false',
     )
+  })
+})
+
+describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
+  it('calls scene.setCentralBody when a different body is selected', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+
+    expect(setCentralBodyMock).toHaveBeenCalledWith('moon')
+    expect(screen.getByRole('button', { name: 'Moon' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('status')).toHaveTextContent('Moon selected')
+  })
+
+  it('hides Earth-only presets and shows the body radius in the perigee warning once a non-Earth body is selected', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+
+    expect(screen.queryByRole('button', { name: 'ISS' })).not.toBeInTheDocument()
+  })
+
+  it('disables "Track real satellite" once a non-Earth body is selected', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+
+    expect(screen.getByRole('button', { name: 'Track real satellite' })).toBeDisabled()
+  })
+
+  it('falls back to design mode when switching away from Earth while tracking a real satellite', async () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    await screen.findByText('ISS (ZARYA)')
+    expect(screen.getByRole('button', { name: 'Track real satellite' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+
+    expect(screen.getByRole('button', { name: 'Design orbit' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('hides ground-station/all-satellites/ground-track/export controls once a non-Earth body is selected', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+
+    expect(screen.queryByRole('button', { name: 'All satellites' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ground stations' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Ground track')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Export KML' })).not.toBeInTheDocument()
+  })
+
+  it('re-shows Earth-only controls when switching back to Earth', () => {
+    render(<OrbitViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Earth' }))
+
+    expect(screen.getByRole('button', { name: 'All satellites' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'ISS' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Track real satellite' })).not.toBeDisabled()
   })
 })

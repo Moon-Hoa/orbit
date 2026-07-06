@@ -1,4 +1,4 @@
-import type { OrbitalElements, Vector3 } from '../engine'
+import { DEFAULT_CENTRAL_BODY_ID, isCentralBodyId, type OrbitalElements, type Vector3 } from '../engine'
 import type { CameraState, Scenario } from './types'
 
 const URL_NUMBER_PRECISION = 6
@@ -33,6 +33,7 @@ export function encodeScenario(scenario: Scenario): URLSearchParams {
   const params = new URLSearchParams()
   params.set('mode', scenario.mode)
   params.set('speed', formatNumber(scenario.speedMultiplier))
+  params.set('body', scenario.centralBody)
 
   if (scenario.mode === 'design') {
     const { elements } = scenario
@@ -62,6 +63,12 @@ export function decodeScenario(params: URLSearchParams): Scenario | null {
   const speedMultiplier = parseRequiredNumber(params.get('speed'))
   if (Number.isNaN(speedMultiplier) || speedMultiplier <= 0) return null
 
+  const rawBody = params.get('body')
+  // Real-satellite tracking is Earth-only; an older shared URL (or a design
+  // URL with no 'body' param yet) defaults to Earth either way.
+  const centralBody =
+    mode === 'track-real' ? DEFAULT_CENTRAL_BODY_ID : isCentralBodyId(rawBody) ? rawBody : DEFAULT_CENTRAL_BODY_ID
+
   let camera: CameraState | undefined
   const position = parseVector3(params.get('cam'))
   const target = parseVector3(params.get('tgt'))
@@ -70,7 +77,7 @@ export function decodeScenario(params: URLSearchParams): Scenario | null {
   if (mode === 'track-real') {
     const noradId = params.get('norad')
     if (!noradId) return null
-    return { mode, noradId, speedMultiplier, camera }
+    return { mode, noradId, speedMultiplier, centralBody, camera }
   }
 
   const semiMajorAxisKm = parseRequiredNumber(params.get('a'))
@@ -99,5 +106,5 @@ export function decodeScenario(params: URLSearchParams): Scenario | null {
     trueAnomalyRad: degToRad(trueAnomalyDeg),
   }
 
-  return { mode, elements, speedMultiplier, camera }
+  return { mode, elements, speedMultiplier, centralBody, camera }
 }

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { EARTH_RADIUS_KM } from '../engine'
+import { EARTH_RADIUS_KM, MOON_MU_KM3_S2, MOON_RADIUS_KM } from '../engine'
 import { PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import type { CompanionEntry } from './companions'
 import { StatsPanel, type OrbitShape } from './StatsPanel'
@@ -71,6 +71,13 @@ describe('StatsPanel', () => {
     renderPanel({ unitSystem: 'imperial' })
     expect(screen.getByText('256 mi')).toBeInTheDocument()
     expect(screen.getByText('251 mi')).toBeInTheDocument()
+  })
+
+  it('uses the given mu/body radius for a non-Earth body (see Moon/Mars view issues)', () => {
+    const lowLunarOrbit: OrbitShape = { semiMajorAxisKm: MOON_RADIUS_KM + 100, eccentricity: 0 }
+    renderPanel({ orbitShape: lowLunarOrbit, muKm3S2: MOON_MU_KM3_S2, bodyRadiusKm: MOON_RADIUS_KM })
+    expect(screen.getByText('117.8 min')).toBeInTheDocument()
+    expect(screen.getAllByText('100 km')).toHaveLength(2)
   })
 
   it('hides the eclipse indicator by default (design mode)', () => {

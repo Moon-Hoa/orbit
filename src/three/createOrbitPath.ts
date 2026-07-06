@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { EARTH_RADIUS_SCENE_UNITS } from './constants'
+import { CENTRAL_BODY_RADIUS_SCENE_UNITS } from './constants'
 
 /** Default (primary-object) orbit path color, matching the rest of the UI's accent. */
 export const DEFAULT_ORBIT_PATH_COLOR = 0x38bdf8
@@ -10,7 +10,7 @@ export function createOrbitPath(
   color = DEFAULT_ORBIT_PATH_COLOR,
 ): THREE.Mesh {
   const curve = new THREE.CatmullRomCurve3(points, true)
-  const tubeRadius = EARTH_RADIUS_SCENE_UNITS * 0.006
+  const tubeRadius = CENTRAL_BODY_RADIUS_SCENE_UNITS * 0.006
   const geometry = new THREE.TubeGeometry(curve, points.length * 2, tubeRadius, 8, true)
   const material = new THREE.MeshBasicMaterial({ color })
 

@@ -13,6 +13,12 @@ interface ElementPanelProps {
   onAddCompanionMany?: (presets: Preset[]) => BulkAddSummary
   enableJ2: boolean
   onEnableJ2Change: (enableJ2: boolean) => void
+  /** The selected central body's radius, km. Defaults to Earth's. */
+  bodyRadiusKm?: number
+  /** The selected central body's display name, used in the perigee warning. Defaults to "Earth". */
+  bodyLabel?: string
+  /** Presets to offer (e.g. ISS, GEO); pass `[]` for a non-Earth body. Defaults to the full built-in list. */
+  presets?: Preset[]
 }
 
 /** Sliders + numeric inputs for the six classical orbital elements, live-synced to engine state. */
@@ -24,9 +30,11 @@ export function ElementPanel({
   onAddCompanionMany,
   enableJ2,
   onEnableJ2Change,
+  bodyRadiusKm = EARTH_RADIUS_KM,
+  bodyLabel = 'Earth',
+  presets,
 }: ElementPanelProps) {
-  const perigeeAltitudeKm =
-    elements.semiMajorAxisKm * (1 - elements.eccentricity) - EARTH_RADIUS_KM
+  const perigeeAltitudeKm = elements.semiMajorAxisKm * (1 - elements.eccentricity) - bodyRadiusKm
 
   return (
     <div className="absolute top-4 left-4 flex w-72 flex-col gap-2 rounded-lg bg-slate-900/80 p-3 backdrop-blur">
@@ -35,12 +43,13 @@ export function ElementPanel({
         onSelect={onSelectPreset}
         onAddCompanion={onAddCompanion}
         onAddCompanionMany={onAddCompanionMany}
+        presets={presets}
       />
 
       <ElementSlider
         label="a"
         unit="km"
-        min={EARTH_RADIUS_KM + 200}
+        min={bodyRadiusKm + 200}
         max={50000}
         step={1}
         value={elements.semiMajorAxisKm}
@@ -94,7 +103,7 @@ export function ElementPanel({
 
       {perigeeAltitudeKm < 0 && (
         <p className="mt-1 text-xs text-red-400">
-          Warning: perigee altitude is {perigeeAltitudeKm.toFixed(0)} km — orbit intersects Earth.
+          Warning: perigee altitude is {perigeeAltitudeKm.toFixed(0)} km — orbit intersects {bodyLabel}.
         </p>
       )}
 
