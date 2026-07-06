@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { CENTRAL_BODIES, type CentralBodyId } from '../engine'
-import type { CelestialObjectSelection, GroundStationSelection } from '../three/OrbitScene'
 import { AllSatellitesToggle } from './AllSatellitesToggle'
 import { CelestialObjectLayerPanel } from './CelestialObjectLayerPanel'
 import type { UnitSystem } from './distanceUnits'
@@ -13,13 +12,10 @@ interface SettingsPanelProps {
   onToggleSatelliteSwarm: (visible: boolean) => Promise<void>
   visibleGroundStationCategories: ReadonlySet<string>
   onToggleGroundStationCategory: (categoryId: string, visible: boolean) => void
-  groundStationSelection: GroundStationSelection | null
-  onUseForPassPrediction?: () => void
   visibleCelestialCategories: ReadonlySet<string>
   onToggleCelestialCategory: (categoryId: string, visible: boolean) => void
   celestialOrbitersVisible: boolean
   onToggleCelestialOrbiters: (visible: boolean) => void
-  celestialObjectSelection: CelestialObjectSelection | null
 }
 
 /**
@@ -29,7 +25,10 @@ interface SettingsPanelProps {
  * (Moon/Mars) - now live here as labeled sections. `ModeToggle` and
  * `CentralBodySelector` deliberately stay separate, top-level controls:
  * they're "what you're doing/looking at" (like the existing mode toggle),
- * not a persistent display preference.
+ * not a persistent display preference. Info on whichever marker was last
+ * clicked shows in `MarkerTooltip`, anchored to it on the globe, rather than
+ * in these layer sections - so this panel doesn't need to know about the
+ * current selection at all.
  */
 export function SettingsPanel({
   unitSystem,
@@ -38,13 +37,10 @@ export function SettingsPanel({
   onToggleSatelliteSwarm,
   visibleGroundStationCategories,
   onToggleGroundStationCategory,
-  groundStationSelection,
-  onUseForPassPrediction,
   visibleCelestialCategories,
   onToggleCelestialCategory,
   celestialOrbitersVisible,
   onToggleCelestialOrbiters,
-  celestialObjectSelection,
 }: SettingsPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
   const isEarth = CENTRAL_BODIES[centralBody].hasEarthOnlyFeatures
@@ -107,8 +103,6 @@ export function SettingsPanel({
                 <GroundStationLayerPanel
                   visibleCategoryIds={visibleGroundStationCategories}
                   onToggleCategory={onToggleGroundStationCategory}
-                  selection={groundStationSelection}
-                  onUseForPassPrediction={onUseForPassPrediction}
                 />
               </div>
             </>
@@ -120,7 +114,6 @@ export function SettingsPanel({
                 onToggleCategory={onToggleCelestialCategory}
                 orbitersVisible={celestialOrbitersVisible}
                 onToggleOrbiters={onToggleCelestialOrbiters}
-                selection={celestialObjectSelection}
               />
             </div>
           )}

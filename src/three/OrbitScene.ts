@@ -27,6 +27,7 @@ import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
 import { createMars } from './createMars'
 import { createMoon } from './createMoon'
+import { type MarkerScreenPosition, projectMarkerToScreen } from './markerScreenPosition'
 import { DEFAULT_ORBIT_PATH_COLOR, createOrbitPath } from './createOrbitPath'
 import { DEFAULT_MARKER_COLOR, createSatelliteMarker } from './createSatelliteMarker'
 import { createGroundStationPin, createGroundStationPinMaterial } from './createGroundStationPin'
@@ -128,7 +129,25 @@ export interface OrbitSceneOptions {
   onGroundStationSelect?: (selection: GroundStationSelection) => void
   /** Called when the user clicks a visible celestial surface object pin or orbiter marker. */
   onCelestialObjectSelect?: (selection: CelestialObjectSelection) => void
+  /**
+   * Called whenever the current selection (from either callback above) is
+   * dismissed: clicking empty space, clicking the selected marker again,
+   * its layer being hidden, or switching central body.
+   */
+  onSelectionClear?: () => void
+  /**
+   * Called every frame with where the selected marker currently projects to
+   * on screen (so a tooltip can track it through camera orbit/zoom), or
+   * `null` when nothing is selected.
+   */
+  onSelectedMarkerPositionUpdate?: (position: MarkerScreenPosition | null) => void
 }
+
+/** Identifies whichever marker is currently selected, for occlusion/visibility checks and re-clicking to dismiss. */
+type SelectedMarker =
+  | { kind: 'ground-station'; mesh: THREE.Mesh; categoryId: string }
+  | { kind: 'celestial-surface'; mesh: THREE.Mesh; categoryId: string }
+  | { kind: 'celestial-orbiter'; mesh: THREE.Mesh }
 
 interface TrackedObject {
   source: OrbitSource
@@ -196,12 +215,15 @@ export class OrbitScene {
   private readonly onAutoPause?: () => void
   private readonly onGroundStationSelect?: (selection: GroundStationSelection) => void
   private readonly onCelestialObjectSelect?: (selection: CelestialObjectSelection) => void
+  private readonly onSelectionClear?: () => void
+  private readonly onSelectedMarkerPositionUpdate?: (position: MarkerScreenPosition | null) => void
   private readonly sun: THREE.DirectionalLight
   private readonly raycaster = new THREE.Raycaster()
   private readonly groundStationCategories = new Map<string, GroundStationCategoryState>()
   private readonly celestialObjectCategories = new Map<string, CelestialSurfaceCategoryState>()
   private readonly celestialOrbiters = new Map<string, CelestialOrbiterState>()
   private celestialOrbitersVisible = false
+  private selectedMarker: SelectedMarker | null = null
   private pointerDownPosition: { x: number; y: number } | null = null
   private satelliteSwarm: SatelliteSwarm | null = null
   private satelliteSwarmVisible = false
@@ -233,6 +255,8 @@ export class OrbitScene {
     this.onAutoPause = options.onAutoPause
     this.onGroundStationSelect = options.onGroundStationSelect
     this.onCelestialObjectSelect = options.onCelestialObjectSelect
+    this.onSelectionClear = options.onSelectionClear
+    this.onSelectedMarkerPositionUpdate = options.onSelectedMarkerPositionUpdate
     this.scene = new THREE.Scene()
 
     this.centralBodyId = options.initialCentralBody ?? DEFAULT_CENTRAL_BODY_ID
@@ -417,6 +441,7 @@ export class OrbitScene {
    */
   setCentralBody(id: CentralBodyId): void {
     if (id === this.centralBodyId) return
+    this.clearSelection() // avoid a dangling reference into a mesh rebuildCelestialObjects is about to dispose
     const info = CENTRAL_BODIES[id]
     this.centralBodyId = id
     this.centralBodyMuKm3S2 = info.muKm3S2
@@ -775,22 +800,36 @@ export class OrbitScene {
     if (this.celestialOrbitersVisible) {
       for (const state of this.celestialOrbiters.values()) visiblePins.push(state.marker)
     }
-    if (visiblePins.length === 0) return
 
-    this.raycaster.setFromCamera(this.pointerToNdc(event), this.camera)
-    const [hit] = this.raycaster.intersectObjects(visiblePins, false)
-    if (!hit) return
+    const hit =
+      visiblePins.length > 0
+        ? (() => {
+            this.raycaster.setFromCamera(this.pointerToNdc(event), this.camera)
+            return this.raycaster.intersectObjects(visiblePins, false)[0]
+          })()
+        : undefined
+
+    if (!hit) {
+      this.clearSelection() // a legitimate click on empty space dismisses whatever was selected
+      return
+    }
+    if (this.selectedMarker?.mesh === hit.object) {
+      this.clearSelection() // clicking the already-selected marker again dismisses it
+      return
+    }
 
     for (const state of this.groundStationCategories.values()) {
       for (const [stationId, pin] of state.pinsByStationId) {
         if (pin !== hit.object) continue
         const station = state.stationsById.get(stationId)
         if (!station) return
+        this.selectedMarker = { kind: 'ground-station', mesh: pin, categoryId: state.categoryId }
         this.onGroundStationSelect?.({
           station,
           categoryId: state.categoryId,
           categoryLabel: state.categoryLabel,
         })
+        this.reportSelectedMarkerPosition()
         return
       }
     }
@@ -799,20 +838,73 @@ export class OrbitScene {
         if (pin !== hit.object) continue
         const object = state.objectsById.get(objectId)
         if (!object) return
+        this.selectedMarker = { kind: 'celestial-surface', mesh: pin, categoryId: state.categoryId }
         this.onCelestialObjectSelect?.({
           kind: 'surface',
           object,
           categoryId: state.categoryId,
           categoryLabel: state.categoryLabel,
         })
+        this.reportSelectedMarkerPosition()
         return
       }
     }
     for (const state of this.celestialOrbiters.values()) {
       if (state.marker !== hit.object) continue
+      this.selectedMarker = { kind: 'celestial-orbiter', mesh: state.marker }
       this.onCelestialObjectSelect?.({ kind: 'orbiter', object: state.orbiter })
+      this.reportSelectedMarkerPosition()
       return
     }
+  }
+
+  /** Whether the currently-selected marker's layer is still visible (it may have been toggled off since selection). */
+  private isSelectedMarkerLayerVisible(): boolean {
+    if (!this.selectedMarker) return false
+    switch (this.selectedMarker.kind) {
+      case 'ground-station':
+        return this.groundStationCategories.get(this.selectedMarker.categoryId)?.visible ?? false
+      case 'celestial-surface':
+        return this.celestialObjectCategories.get(this.selectedMarker.categoryId)?.visible ?? false
+      case 'celestial-orbiter':
+        return this.celestialOrbitersVisible
+    }
+  }
+
+  /**
+   * Projects the currently-selected marker to screen space and reports it via
+   * `onSelectedMarkerPositionUpdate`, so a tooltip can track it through camera
+   * orbit/zoom. Auto-clears the selection if its layer has been hidden since
+   * it was selected. No-ops (reporting nothing) when nothing is selected.
+   */
+  private reportSelectedMarkerPosition(): void {
+    if (!this.selectedMarker) return
+    if (!this.isSelectedMarkerLayerVisible()) {
+      this.clearSelection()
+      return
+    }
+    this.onSelectedMarkerPositionUpdate?.(
+      projectMarkerToScreen(
+        this.selectedMarker.mesh.position,
+        this.camera,
+        this.container.clientWidth,
+        this.container.clientHeight,
+        CENTRAL_BODY_RADIUS_SCENE_UNITS,
+      ),
+    )
+  }
+
+  /**
+   * Dismisses the current marker selection (ground station pin, celestial
+   * surface object pin, or orbiter marker), notifying both the "what's
+   * selected" callback (`onSelectionClear`) and the screen-position callback
+   * (with `null`). No-ops if nothing is selected.
+   */
+  clearSelection(): void {
+    if (!this.selectedMarker) return
+    this.selectedMarker = null
+    this.onSelectionClear?.()
+    this.onSelectedMarkerPositionUpdate?.(null)
   }
 
   /** Repositions every tracked object at the current sim time, and reports focused-object stats/ground tracks. */
@@ -916,6 +1008,10 @@ export class OrbitScene {
       }
 
       this.controls.update()
+      // Runs every frame, not just while playing: the camera can orbit/zoom
+      // (via OrbitControls) even while paused, which alone moves a selected
+      // marker's on-screen projection.
+      this.reportSelectedMarkerPosition()
       this.renderer.render(this.scene, this.camera)
       this.animationFrameId = requestAnimationFrame(tick)
     }

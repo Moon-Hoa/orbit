@@ -1,26 +1,21 @@
 import { GROUND_STATION_CATEGORIES } from '../groundStations'
-import type { GroundStationSelection } from '../three/OrbitScene'
 import { colorToCss } from './companions'
 
 interface GroundStationLayerPanelProps {
   visibleCategoryIds: ReadonlySet<string>
   onToggleCategory: (categoryId: string, visible: boolean) => void
-  selection: GroundStationSelection | null
-  /** Shown as a "use for pass prediction" action on the selected station; omitted (no button) outside track-real mode. */
-  onUseForPassPrediction?: () => void
 }
 
 /**
- * A checkbox per ground station category, plus info on whichever pin was
- * last clicked. A settings section (see `SettingsPanel`), not its own
- * popover - it renders unconditionally and expects its parent to control
- * visibility.
+ * A checkbox per ground station category. A settings section (see
+ * `SettingsPanel`), not its own popover - it renders unconditionally and
+ * expects its parent to control visibility. Info on whichever pin was last
+ * clicked now shows in `MarkerTooltip`, anchored to the pin itself, rather
+ * than here.
  */
 export function GroundStationLayerPanel({
   visibleCategoryIds,
   onToggleCategory,
-  selection,
-  onUseForPassPrediction,
 }: GroundStationLayerPanelProps) {
   return (
     <div>
@@ -45,25 +40,6 @@ export function GroundStationLayerPanel({
           </li>
         ))}
       </ul>
-
-      {selection && (
-        <div className="mt-3 border-t border-slate-700 pt-2">
-          <p className="font-medium text-slate-100">{selection.station.name}</p>
-          <p className="text-slate-400">
-            {selection.categoryLabel} · {selection.station.latitudeDeg.toFixed(2)}°,{' '}
-            {selection.station.longitudeDeg.toFixed(2)}°
-          </p>
-          {onUseForPassPrediction && (
-            <button
-              type="button"
-              onClick={onUseForPassPrediction}
-              className="mt-1.5 rounded bg-sky-500 px-2 py-1 text-white hover:bg-sky-400"
-            >
-              Use for pass prediction
-            </button>
-          )}
-        </div>
-      )}
     </div>
   )
 }

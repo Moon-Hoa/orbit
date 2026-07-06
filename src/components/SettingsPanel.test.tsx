@@ -11,12 +11,10 @@ function renderPanel(overrides: Partial<Parameters<typeof SettingsPanel>[0]> = {
       onToggleSatelliteSwarm={vi.fn().mockResolvedValue(undefined)}
       visibleGroundStationCategories={new Set()}
       onToggleGroundStationCategory={vi.fn()}
-      groundStationSelection={null}
       visibleCelestialCategories={new Set()}
       onToggleCelestialCategory={vi.fn()}
       celestialOrbitersVisible={false}
       onToggleCelestialOrbiters={vi.fn()}
-      celestialObjectSelection={null}
       {...overrides}
     />,
   )

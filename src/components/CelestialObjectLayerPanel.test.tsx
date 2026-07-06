@@ -11,7 +11,6 @@ function renderPanel(overrides: Partial<Parameters<typeof CelestialObjectLayerPa
       onToggleCategory={vi.fn()}
       orbitersVisible={false}
       onToggleOrbiters={vi.fn()}
-      selection={null}
       {...overrides}
     />,
   )
@@ -65,64 +64,5 @@ describe('CelestialObjectLayerPanel', () => {
 
     fireEvent.click(row!.querySelector('input[type="checkbox"]')!)
     expect(onToggleOrbiters).toHaveBeenCalledWith(false)
-  })
-
-  it('shows nothing about a selection until an object has been clicked', () => {
-    const { container } = renderPanel()
-    expect(container.querySelector('.border-t')).not.toBeInTheDocument()
-  })
-
-  it('shows full info for a selected surface object, including its category and coordinates', () => {
-    renderPanel({
-      selection: {
-        kind: 'surface',
-        object: {
-          id: 'apollo-11',
-          name: 'Apollo 11 (Tranquility Base)',
-          mission: 'Apollo 11',
-          agency: 'NASA',
-          date: '1969-07-20',
-          status: 'inactive',
-          description: 'First crewed Moon landing.',
-          latitudeDeg: 0.6875,
-          longitudeDeg: 23.4333,
-        },
-        categoryId: 'moon-apollo',
-        categoryLabel: 'Apollo landings',
-      },
-    })
-
-    expect(screen.getByText('Apollo 11 (Tranquility Base)')).toBeInTheDocument()
-    expect(screen.getByText('Apollo 11 · NASA')).toBeInTheDocument()
-    expect(screen.getByText('1969-07-20 · Inactive · 0.69°, 23.43°')).toBeInTheDocument()
-    expect(screen.getByText('First crewed Moon landing.')).toBeInTheDocument()
-  })
-
-  it('shows info for a selected orbiter without coordinates', () => {
-    renderPanel({
-      selection: {
-        kind: 'orbiter',
-        object: {
-          id: 'lro',
-          name: 'Lunar Reconnaissance Orbiter',
-          mission: 'LRO',
-          agency: 'NASA',
-          date: '2009-06-18',
-          status: 'active',
-          description: 'Polar mapping orbiter.',
-          elements: {
-            semiMajorAxisKm: 1787.4,
-            eccentricity: 0,
-            inclinationRad: 0,
-            raanRad: 0,
-            argOfPerigeeRad: 0,
-            trueAnomalyRad: 0,
-          },
-        },
-      },
-    })
-
-    expect(screen.getByText('Lunar Reconnaissance Orbiter')).toBeInTheDocument()
-    expect(screen.getByText('2009-06-18 · Active')).toBeInTheDocument()
   })
 })

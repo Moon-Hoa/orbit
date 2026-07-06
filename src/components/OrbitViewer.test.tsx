@@ -24,6 +24,7 @@ const setSatelliteSwarmVisibleMock = vi.fn()
 const setCentralBodyMock = vi.fn()
 const setCelestialObjectCategoryVisibleMock = vi.fn()
 const setCelestialOrbitersVisibleMock = vi.fn()
+const clearSelectionMock = vi.fn()
 
 let capturedOptions: OrbitSceneOptions | null = null
 
@@ -59,6 +60,7 @@ vi.mock('../three/OrbitScene', async (importOriginal) => {
         setCentralBody: setCentralBodyMock,
         setCelestialObjectCategoryVisible: setCelestialObjectCategoryVisibleMock,
         setCelestialOrbitersVisible: setCelestialOrbitersVisibleMock,
+        clearSelection: clearSelectionMock,
       })
     }),
   }
@@ -758,7 +760,6 @@ describe('OrbitViewer ground stations', () => {
 
   it('does not show a "use for pass prediction" button in design mode', () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByLabelText('Settings'))
 
     act(() => {
       capturedOptions?.onGroundStationSelect?.({
@@ -766,6 +767,7 @@ describe('OrbitViewer ground stations', () => {
         categoryId: 'ksat',
         categoryLabel: 'KSAT',
       })
+      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 100, yPx: 100, occluded: false })
     })
 
     expect(screen.getByText('Svalbard (SvalSat)')).toBeInTheDocument()
@@ -777,19 +779,81 @@ describe('OrbitViewer ground stations', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
     await screen.findByText('ISS (ZARYA)')
 
-    fireEvent.click(screen.getByLabelText('Settings'))
     act(() => {
       capturedOptions?.onGroundStationSelect?.({
         station: { id: 'ksat-svalbard', name: 'Svalbard (SvalSat)', latitudeDeg: 78.2298, longitudeDeg: 15.4078 },
         categoryId: 'ksat',
         categoryLabel: 'KSAT',
       })
+      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 100, yPx: 100, occluded: false })
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Use for pass prediction' }))
 
     await waitFor(() => expect(screen.getByLabelText('Observer latitude')).toHaveValue(78.2298))
     expect(screen.getByLabelText('Observer longitude')).toHaveValue(15.4078)
+  })
+})
+
+describe('OrbitViewer marker tooltip (see #32)', () => {
+  const svalbardSelection = {
+    station: { id: 'ksat-svalbard', name: 'Svalbard (SvalSat)', latitudeDeg: 78.2298, longitudeDeg: 15.4078 },
+    categoryId: 'ksat',
+    categoryLabel: 'KSAT',
+  }
+
+  it('shows a tooltip anchored at the reported screen position once a ground station pin is selected', () => {
+    render(<OrbitViewer />)
+
+    act(() => {
+      capturedOptions?.onGroundStationSelect?.(svalbardSelection)
+      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 250, yPx: 150, occluded: false })
+    })
+
+    const name = screen.getByText('Svalbard (SvalSat)')
+    expect(name.closest('div')).toHaveStyle({ left: '250px', top: '150px' })
+  })
+
+  it('hides the tooltip while the marker is occluded, without losing the selection', () => {
+    render(<OrbitViewer />)
+
+    act(() => {
+      capturedOptions?.onGroundStationSelect?.(svalbardSelection)
+      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 250, yPx: 150, occluded: true })
+    })
+    expect(screen.queryByText('Svalbard (SvalSat)')).not.toBeInTheDocument()
+
+    act(() => {
+      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 260, yPx: 160, occluded: false })
+    })
+    expect(screen.getByText('Svalbard (SvalSat)')).toBeInTheDocument()
+  })
+
+  it('calls scene.clearSelection when the tooltip is dismissed via its close button', () => {
+    render(<OrbitViewer />)
+
+    act(() => {
+      capturedOptions?.onGroundStationSelect?.(svalbardSelection)
+      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 250, yPx: 150, occluded: false })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(clearSelectionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the tooltip when the scene reports the selection cleared (e.g. an empty-space click)', () => {
+    render(<OrbitViewer />)
+
+    act(() => {
+      capturedOptions?.onGroundStationSelect?.(svalbardSelection)
+      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 250, yPx: 150, occluded: false })
+    })
+    expect(screen.getByText('Svalbard (SvalSat)')).toBeInTheDocument()
+
+    act(() => {
+      capturedOptions?.onSelectionClear?.()
+    })
+    expect(screen.queryByText('Svalbard (SvalSat)')).not.toBeInTheDocument()
   })
 })
 

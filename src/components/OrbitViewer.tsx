@@ -22,6 +22,7 @@ import {
   nextCompanionColor,
 } from './companions'
 import type { ClosestApproachResult } from '../three/closestApproach'
+import type { MarkerScreenPosition } from '../three/markerScreenPosition'
 import {
   type CelestialObjectSelection,
   type GroundStationSelection,
@@ -39,6 +40,7 @@ import { formatElapsed } from './formatElapsed'
 import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView, type GroundTrack } from './GroundTrackView'
 import { HohmannPlanner } from './HohmannPlanner'
+import { MarkerTooltip } from './MarkerTooltip'
 import { ModeToggle, type ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
 import { SatelliteSearch } from './SatelliteSearch'
@@ -137,6 +139,7 @@ export function OrbitViewer() {
   const [celestialOrbitersVisible, setCelestialOrbitersVisible] = useState(false)
   const [celestialObjectSelection, setCelestialObjectSelection] =
     useState<CelestialObjectSelection | null>(null)
+  const [markerScreenPosition, setMarkerScreenPosition] = useState<MarkerScreenPosition | null>(null)
 
   /** Posts a message to the visually-hidden aria-live region, for screen readers. */
   function announce(message: string) {
@@ -267,8 +270,19 @@ export function OrbitViewer() {
       onSolarUpdate: setSubsolarPoint,
       onClosestApproachUpdate: setClosestApproach,
       onAutoPause: () => setIsPlaying(false),
-      onGroundStationSelect: setGroundStationSelection,
-      onCelestialObjectSelect: setCelestialObjectSelection,
+      onGroundStationSelect: (selection) => {
+        setGroundStationSelection(selection)
+        setCelestialObjectSelection(null) // only one marker is selected at a time
+      },
+      onCelestialObjectSelect: (selection) => {
+        setCelestialObjectSelection(selection)
+        setGroundStationSelection(null)
+      },
+      onSelectionClear: () => {
+        setGroundStationSelection(null)
+        setCelestialObjectSelection(null)
+      },
+      onSelectedMarkerPositionUpdate: setMarkerScreenPosition,
     })
     sceneRef.current = scene
     scene.start()
@@ -603,13 +617,10 @@ export function OrbitViewer() {
             onToggleSatelliteSwarm={setSatelliteSwarmVisible}
             visibleGroundStationCategories={visibleGroundStationCategories}
             onToggleGroundStationCategory={toggleGroundStationCategory}
-            groundStationSelection={groundStationSelection}
-            onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
             visibleCelestialCategories={visibleCelestialCategories}
             onToggleCelestialCategory={toggleCelestialObjectCategory}
             celestialOrbitersVisible={celestialOrbitersVisible}
             onToggleCelestialOrbiters={setOrbitersVisible}
-            celestialObjectSelection={celestialObjectSelection}
           />
         </div>
         {currentBody.hasEarthOnlyFeatures && (
@@ -638,6 +649,13 @@ export function OrbitViewer() {
         scrubRef={scrubRef}
         timeReadoutRef={timeReadoutRef}
         realTimeReadoutRef={realTimeReadoutRef}
+      />
+      <MarkerTooltip
+        position={markerScreenPosition}
+        groundStationSelection={groundStationSelection}
+        celestialObjectSelection={celestialObjectSelection}
+        onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
+        onDismiss={() => sceneRef.current?.clearSelection()}
       />
     </div>
   )

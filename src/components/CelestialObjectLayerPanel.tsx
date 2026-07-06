@@ -1,6 +1,6 @@
 import { CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES } from '../celestialObjects'
 import type { CentralBodyId } from '../engine'
-import { ORBITER_MARKER_COLOR, type CelestialObjectSelection } from '../three/OrbitScene'
+import { ORBITER_MARKER_COLOR } from '../three/OrbitScene'
 import { colorToCss } from './companions'
 
 interface CelestialObjectLayerPanelProps {
@@ -9,16 +9,16 @@ interface CelestialObjectLayerPanelProps {
   onToggleCategory: (categoryId: string, visible: boolean) => void
   orbitersVisible: boolean
   onToggleOrbiters: (visible: boolean) => void
-  selection: CelestialObjectSelection | null
 }
 
 /**
  * A checkbox per surface-object category (landers/rovers, failed landings,
- * ...) plus one more for active orbiters, and basic info on whichever
- * pin/marker the user last clicked. A settings section (see
+ * ...) plus one more for active orbiters. A settings section (see
  * `SettingsPanel`), not its own popover - it renders unconditionally and
  * expects its parent to control visibility. Only meaningful for Moon/Mars -
- * `CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES` has no entries for Earth.
+ * `CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES` has no entries for Earth. Info on
+ * whichever pin/marker was last clicked now shows in `MarkerTooltip`,
+ * anchored to it, rather than here.
  */
 export function CelestialObjectLayerPanel({
   centralBody,
@@ -26,7 +26,6 @@ export function CelestialObjectLayerPanel({
   onToggleCategory,
   orbitersVisible,
   onToggleOrbiters,
-  selection,
 }: CelestialObjectLayerPanelProps) {
   const categories = CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES[centralBody]
 
@@ -68,21 +67,6 @@ export function CelestialObjectLayerPanel({
           </label>
         </li>
       </ul>
-
-      {selection && (
-        <div className="mt-3 border-t border-slate-700 pt-2">
-          <p className="font-medium text-slate-100">{selection.object.name}</p>
-          <p className="text-slate-400">
-            {selection.object.mission} · {selection.object.agency}
-          </p>
-          <p className="text-slate-400">
-            {selection.object.date} · {selection.object.status === 'active' ? 'Active' : 'Inactive'}
-            {selection.kind === 'surface' &&
-              ` · ${selection.object.latitudeDeg.toFixed(2)}°, ${selection.object.longitudeDeg.toFixed(2)}°`}
-          </p>
-          <p className="mt-1 text-slate-300">{selection.object.description}</p>
-        </div>
-      )}
     </div>
   )
 }
