@@ -46,6 +46,7 @@ import { PlaybackControls } from './PlaybackControls'
 import { SatelliteSearch } from './SatelliteSearch'
 import { SettingsPanel } from './SettingsPanel'
 import { ShareButton } from './ShareButton'
+import { ViewModeSelector, type ViewMode } from './ViewModeSelector'
 import { StatsPanel } from './StatsPanel'
 
 /** NORAD catalog number for the ISS - used as the default when entering track-real mode. */
@@ -83,7 +84,12 @@ function urlForScenario(scenario: Scenario): string {
  * shareable URL yet (see scenario/urlCodec.ts) - shared links reproduce the
  * primary object only.
  */
-export function OrbitViewer() {
+interface OrbitViewerProps {
+  /** Called to switch to the solar system view. Defaults to a no-op, for tests/callers that don't care about it. */
+  onViewModeChange?: (viewMode: ViewMode) => void
+}
+
+export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = {}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OrbitScene | null>(null)
   const scrubRef = useRef<HTMLInputElement>(null)
@@ -600,6 +606,7 @@ export function OrbitViewer() {
       {mode === 'design' && currentBody.hasEarthOnlyFeatures && <HohmannPlanner />}
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
         <div className="flex gap-2">
+          <ViewModeSelector viewMode="body" onChange={onViewModeChange} />
           <CentralBodySelector centralBody={centralBodyId} onChange={changeCentralBody} />
           <ModeToggle
             mode={mode}

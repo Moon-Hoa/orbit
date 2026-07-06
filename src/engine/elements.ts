@@ -7,6 +7,42 @@ const Z_AXIS: Vector3 = { x: 0, y: 0, z: 1 }
 /** Tolerance below which eccentricity/inclination are treated as circular/equatorial. */
 const SINGULARITY_TOLERANCE = 1e-11
 
+/**
+ * Rotates a perifocal-frame (PQW) 2D vector into the reference inertial frame
+ * (ECI for a body-centered orbit, or the J2000 ecliptic frame for a
+ * heliocentric one - the math is identical either way), via
+ * R3(-raan) * R1(-i) * R3(-argOfPeriapsis). Only the first two columns of the
+ * full rotation matrix are needed since PQW vectors always have a zero
+ * z-component. Shared by {@link elementsToStateVector} and the heliocentric
+ * planetary-position code in `ephemeris.ts`.
+ */
+export function rotatePerifocalToInertial(
+  vector: { x: number; y: number },
+  raanRad: number,
+  inclinationRad: number,
+  argOfPeriapsisRad: number,
+): Vector3 {
+  const cosO = Math.cos(raanRad)
+  const sinO = Math.sin(raanRad)
+  const cosI = Math.cos(inclinationRad)
+  const sinI = Math.sin(inclinationRad)
+  const cosW = Math.cos(argOfPeriapsisRad)
+  const sinW = Math.sin(argOfPeriapsisRad)
+
+  const r11 = cosO * cosW - sinO * sinW * cosI
+  const r12 = -cosO * sinW - sinO * cosW * cosI
+  const r21 = sinO * cosW + cosO * sinW * cosI
+  const r22 = -sinO * sinW + cosO * cosW * cosI
+  const r31 = sinW * sinI
+  const r32 = cosW * sinI
+
+  return {
+    x: r11 * vector.x + r12 * vector.y,
+    y: r21 * vector.x + r22 * vector.y,
+    z: r31 * vector.x + r32 * vector.y,
+  }
+}
+
 /** Converts classical orbital elements to a position/velocity state vector in the ECI frame. */
 export function elementsToStateVector(
   elements: OrbitalElements,
@@ -32,31 +68,9 @@ export function elementsToStateVector(
     y: (mu / h) * (e + Math.cos(nu)),
   }
 
-  // Perifocal -> ECI rotation matrix, R3(-raan) * R1(-i) * R3(-argp). Only the
-  // first two columns are needed since PQW vectors always have a zero z-component.
-  const cosO = Math.cos(raan)
-  const sinO = Math.sin(raan)
-  const cosI = Math.cos(i)
-  const sinI = Math.sin(i)
-  const cosW = Math.cos(argp)
-  const sinW = Math.sin(argp)
-
-  const r11 = cosO * cosW - sinO * sinW * cosI
-  const r12 = -cosO * sinW - sinO * cosW * cosI
-  const r21 = sinO * cosW + cosO * sinW * cosI
-  const r22 = -sinO * sinW + cosO * cosW * cosI
-  const r31 = sinW * sinI
-  const r32 = cosW * sinI
-
-  const rotate = (v: { x: number; y: number }): Vector3 => ({
-    x: r11 * v.x + r12 * v.y,
-    y: r21 * v.x + r22 * v.y,
-    z: r31 * v.x + r32 * v.y,
-  })
-
   return {
-    position: rotate(positionPqw),
-    velocity: rotate(velocityPqw),
+    position: rotatePerifocalToInertial(positionPqw, raan, i, argp),
+    velocity: rotatePerifocalToInertial(velocityPqw, raan, i, argp),
   }
 }
 
