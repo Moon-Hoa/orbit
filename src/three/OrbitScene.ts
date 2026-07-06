@@ -453,6 +453,13 @@ export class OrbitScene {
     this.centralBodyMesh = createCentralBodyMesh(id)
     this.scene.add(this.centralBodyMesh)
 
+    // Surface-object categories always start hidden for a newly-selected body
+    // (rebuildCelestialObjects below creates each fresh group with
+    // `visible: false`), so orbiters should too - otherwise the *new* body's
+    // orbiters would inherit whatever the *previous* body's "active orbiters"
+    // toggle was left at, appearing uninvited (e.g. switching from the Moon
+    // with orbiters on straight to Mars would show Mars's orbiters too).
+    this.celestialOrbitersVisible = false
     this.rebuildCelestialObjects(id)
 
     // Ground station pins and the satellite swarm are real Earth

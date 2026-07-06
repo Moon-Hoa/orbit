@@ -514,6 +514,7 @@ export function OrbitViewer() {
     }
     setCentralBodyId(id)
     setVisibleCelestialCategories(new Set())
+    setCelestialOrbitersVisible(false)
     setCelestialObjectSelection(null)
     announce(`${CENTRAL_BODIES[id].label} selected`)
   }
