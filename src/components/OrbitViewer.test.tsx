@@ -749,7 +749,7 @@ describe('OrbitViewer bulk companions', () => {
 describe('OrbitViewer ground stations', () => {
   it('toggles a ground station category through to scene.setGroundStationCategoryVisible', () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ground stations' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     fireEvent.click(screen.getByLabelText(/ESA Estrack/))
 
@@ -758,7 +758,7 @@ describe('OrbitViewer ground stations', () => {
 
   it('does not show a "use for pass prediction" button in design mode', () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ground stations' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     act(() => {
       capturedOptions?.onGroundStationSelect?.({
@@ -777,7 +777,7 @@ describe('OrbitViewer ground stations', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
     await screen.findByText('ISS (ZARYA)')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ground stations' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
     act(() => {
       capturedOptions?.onGroundStationSelect?.({
         station: { id: 'ksat-svalbard', name: 'Svalbard (SvalSat)', latitudeDeg: 78.2298, longitudeDeg: 15.4078 },
@@ -797,6 +797,7 @@ describe('OrbitViewer all satellites', () => {
   it('calls scene.setSatelliteSwarmVisible(true) when the toggle is clicked on', async () => {
     setSatelliteSwarmVisibleMock.mockResolvedValue(undefined)
     render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'All satellites' }))
@@ -812,6 +813,7 @@ describe('OrbitViewer all satellites', () => {
   it('calls scene.setSatelliteSwarmVisible(false) when toggled back off', async () => {
     setSatelliteSwarmVisibleMock.mockResolvedValue(undefined)
     render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'All satellites' }))
@@ -830,6 +832,7 @@ describe('OrbitViewer all satellites', () => {
   it('shows an error and stays off if the scene rejects (e.g. the Celestrak fetch failed)', async () => {
     setSatelliteSwarmVisibleMock.mockRejectedValue(new Error('fetch failed'))
     render(<OrbitViewer />)
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'All satellites' }))
@@ -889,9 +892,10 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
     render(<OrbitViewer />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     expect(screen.queryByRole('button', { name: 'All satellites' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Ground stations' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Ground stations')).not.toBeInTheDocument()
     expect(screen.queryByText('Ground track')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Export KML' })).not.toBeInTheDocument()
   })
@@ -901,6 +905,7 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
     fireEvent.click(screen.getByRole('button', { name: 'Earth' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     expect(screen.getByRole('button', { name: 'All satellites' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ISS' })).toBeInTheDocument()
@@ -909,24 +914,26 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
 })
 
 describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog issues)', () => {
-  it('shows the "Surface objects" panel instead of ground-station controls once a non-Earth body is selected', () => {
+  it('shows the "Surface objects" section instead of ground-station controls once a non-Earth body is selected', () => {
     render(<OrbitViewer />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
-    expect(screen.getByRole('button', { name: 'Surface objects' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Ground stations' })).not.toBeInTheDocument()
+    expect(screen.getByText('Surface objects')).toBeInTheDocument()
+    expect(screen.queryByText('Ground stations')).not.toBeInTheDocument()
   })
 
-  it('hides the "Surface objects" panel on Earth', () => {
+  it('hides the "Surface objects" section on Earth', () => {
     render(<OrbitViewer />)
-    expect(screen.queryByRole('button', { name: 'Surface objects' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Settings'))
+    expect(screen.queryByText('Surface objects')).not.toBeInTheDocument()
   })
 
   it('lists Moon categories and calls scene.setCelestialObjectCategoryVisible when one is toggled', () => {
     render(<OrbitViewer />)
     fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Surface objects' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     const row = screen.getByText('Apollo landings').closest('label')
     fireEvent.click(row!.querySelector('input[type="checkbox"]')!)
@@ -937,7 +944,7 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
   it('lists Mars categories once Mars is selected', () => {
     render(<OrbitViewer />)
     fireEvent.click(screen.getByRole('button', { name: 'Mars' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Surface objects' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     expect(screen.getByText('Landers & rovers')).toBeInTheDocument()
     expect(screen.queryByText('Apollo landings')).not.toBeInTheDocument()
@@ -946,7 +953,7 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
   it('calls scene.setCelestialOrbitersVisible when the orbiters checkbox is toggled', () => {
     render(<OrbitViewer />)
     fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Surface objects' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
 
     const row = screen.getByText('Active orbiters').closest('label')
     fireEvent.click(row!.querySelector('input[type="checkbox"]')!)
@@ -957,7 +964,7 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
   it('resets category visibility and the selected object when switching bodies', () => {
     render(<OrbitViewer />)
     fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Surface objects' }))
+    fireEvent.click(screen.getByLabelText('Settings'))
     fireEvent.click(screen.getByText('Apollo landings').closest('label')!.querySelector('input')!)
 
     fireEvent.click(screen.getByRole('button', { name: 'Mars' }))

@@ -3,10 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES } from '../celestialObjects'
 import { CelestialObjectLayerPanel } from './CelestialObjectLayerPanel'
 
-function openPanel() {
-  fireEvent.click(screen.getByRole('button', { name: 'Surface objects' }))
-}
-
 function renderPanel(overrides: Partial<Parameters<typeof CelestialObjectLayerPanel>[0]> = {}) {
   return render(
     <CelestialObjectLayerPanel
@@ -22,14 +18,8 @@ function renderPanel(overrides: Partial<Parameters<typeof CelestialObjectLayerPa
 }
 
 describe('CelestialObjectLayerPanel', () => {
-  it('hides the category checkboxes until opened', () => {
-    renderPanel()
-    expect(screen.queryByText('Apollo landings')).not.toBeInTheDocument()
-  })
-
   it('lists every category for the given body, plus an orbiters toggle, unchecked by default', () => {
     renderPanel()
-    openPanel()
 
     for (const category of CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES.moon) {
       expect(screen.getByText(category.label)).toBeInTheDocument()
@@ -42,7 +32,6 @@ describe('CelestialObjectLayerPanel', () => {
 
   it('lists Mars categories instead when centralBody is mars', () => {
     renderPanel({ centralBody: 'mars' })
-    openPanel()
 
     for (const category of CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES.mars) {
       expect(screen.getByText(category.label)).toBeInTheDocument()
@@ -52,7 +41,6 @@ describe('CelestialObjectLayerPanel', () => {
 
   it('reflects visibleCategoryIds as checked', () => {
     renderPanel({ visibleCategoryIds: new Set(['moon-apollo']) })
-    openPanel()
 
     const row = screen.getByText('Apollo landings').closest('label')
     expect(row?.querySelector('input[type="checkbox"]')).toBeChecked()
@@ -61,7 +49,6 @@ describe('CelestialObjectLayerPanel', () => {
   it('calls onToggleCategory when a category checkbox is clicked', () => {
     const onToggleCategory = vi.fn()
     renderPanel({ onToggleCategory })
-    openPanel()
 
     const row = screen.getByText('Apollo landings').closest('label')
     fireEvent.click(row!.querySelector('input[type="checkbox"]')!)
@@ -72,7 +59,6 @@ describe('CelestialObjectLayerPanel', () => {
   it('reflects orbitersVisible and calls onToggleOrbiters when clicked', () => {
     const onToggleOrbiters = vi.fn()
     renderPanel({ orbitersVisible: true, onToggleOrbiters })
-    openPanel()
 
     const row = screen.getByText('Active orbiters').closest('label')
     expect(row?.querySelector('input[type="checkbox"]')).toBeChecked()
@@ -83,7 +69,6 @@ describe('CelestialObjectLayerPanel', () => {
 
   it('shows nothing about a selection until an object has been clicked', () => {
     const { container } = renderPanel()
-    openPanel()
     expect(container.querySelector('.border-t')).not.toBeInTheDocument()
   })
 
@@ -106,7 +91,6 @@ describe('CelestialObjectLayerPanel', () => {
         categoryLabel: 'Apollo landings',
       },
     })
-    openPanel()
 
     expect(screen.getByText('Apollo 11 (Tranquility Base)')).toBeInTheDocument()
     expect(screen.getByText('Apollo 11 · NASA')).toBeInTheDocument()
@@ -137,7 +121,6 @@ describe('CelestialObjectLayerPanel', () => {
         },
       },
     })
-    openPanel()
 
     expect(screen.getByText('Lunar Reconnaissance Orbiter')).toBeInTheDocument()
     expect(screen.getByText('2009-06-18 · Active')).toBeInTheDocument()

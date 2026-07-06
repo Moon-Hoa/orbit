@@ -430,6 +430,21 @@ export class OrbitScene {
 
     this.rebuildCelestialObjects(id)
 
+    // Ground station pins and the satellite swarm are real Earth
+    // facilities/objects, positioned using Earth's real km - hide them while
+    // away from Earth (otherwise their old scene-space positions, computed
+    // under Earth's km-to-scene-units scale, would appear to sit right on
+    // whatever body is now rendered at that same on-screen radius). Each
+    // category's/the swarm's own `visible` flag is left untouched, so
+    // whichever ones the user had chosen are restored automatically on
+    // returning to Earth.
+    const showEarthOnlyLayers = id === 'earth'
+    for (const state of this.groundStationCategories.values()) {
+      state.group.visible = showEarthOnlyLayers && state.visible
+    }
+    if (showEarthOnlyLayers) this.updateGroundStationPins()
+    this.satelliteSwarm?.setVisible(showEarthOnlyLayers && this.satelliteSwarmVisible)
+
     for (const [objectId, object] of this.objects) {
       if (!(object.source instanceof DesignOrbitSource)) continue
       const reanchored = new DesignOrbitSource(
@@ -804,7 +819,7 @@ export class OrbitScene {
   private syncToCurrentState(forceGroundTrack: boolean): void {
     const currentDate = new Date(this.referenceDate.getTime() + this.simTimeSeconds * 1000)
     this.sun.position.copy(this.sunDirectionInScene(currentDate))
-    if (this.satelliteSwarmVisible) this.satelliteSwarm?.update(currentDate)
+    if (this.satelliteSwarmVisible && this.centralBodyId === 'earth') this.satelliteSwarm?.update(currentDate)
     if (this.celestialOrbitersVisible) this.updateCelestialOrbiterPositions()
 
     let focusedAltitudeKm: number | null = null

@@ -31,14 +31,11 @@ import {
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { AccessibleDataView } from './AccessibleDataView'
-import { AllSatellitesToggle } from './AllSatellitesToggle'
-import { CelestialObjectLayerPanel } from './CelestialObjectLayerPanel'
 import { CentralBodySelector } from './CentralBodySelector'
 import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
 import { ExportControls } from './ExportControls'
 import { formatElapsed } from './formatElapsed'
-import { GroundStationLayerPanel } from './GroundStationLayerPanel'
 import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView, type GroundTrack } from './GroundTrackView'
 import { HohmannPlanner } from './HohmannPlanner'
@@ -599,27 +596,21 @@ export function OrbitViewer() {
             disableTrackReal={!currentBody.hasEarthOnlyFeatures}
           />
           <ShareButton getShareUrl={getShareUrl} />
-          {currentBody.hasEarthOnlyFeatures ? (
-            <>
-              <AllSatellitesToggle onToggle={setSatelliteSwarmVisible} />
-              <GroundStationLayerPanel
-                visibleCategoryIds={visibleGroundStationCategories}
-                onToggleCategory={toggleGroundStationCategory}
-                selection={groundStationSelection}
-                onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
-              />
-            </>
-          ) : (
-            <CelestialObjectLayerPanel
-              centralBody={centralBodyId}
-              visibleCategoryIds={visibleCelestialCategories}
-              onToggleCategory={toggleCelestialObjectCategory}
-              orbitersVisible={celestialOrbitersVisible}
-              onToggleOrbiters={setOrbitersVisible}
-              selection={celestialObjectSelection}
-            />
-          )}
-          <SettingsPanel unitSystem={unitSystem} onUnitSystemChange={setUnitSystem} />
+          <SettingsPanel
+            unitSystem={unitSystem}
+            onUnitSystemChange={setUnitSystem}
+            centralBody={centralBodyId}
+            onToggleSatelliteSwarm={setSatelliteSwarmVisible}
+            visibleGroundStationCategories={visibleGroundStationCategories}
+            onToggleGroundStationCategory={toggleGroundStationCategory}
+            groundStationSelection={groundStationSelection}
+            onUseForPassPrediction={isTrackingReal ? useGroundStationForPassPrediction : undefined}
+            visibleCelestialCategories={visibleCelestialCategories}
+            onToggleCelestialCategory={toggleCelestialObjectCategory}
+            celestialOrbitersVisible={celestialOrbitersVisible}
+            onToggleCelestialOrbiters={setOrbitersVisible}
+            celestialObjectSelection={celestialObjectSelection}
+          />
         </div>
         {currentBody.hasEarthOnlyFeatures && (
           <>

@@ -3,22 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { GROUND_STATION_CATEGORIES } from '../groundStations'
 import { GroundStationLayerPanel } from './GroundStationLayerPanel'
 
-function openPanel() {
-  fireEvent.click(screen.getByRole('button', { name: 'Ground stations' }))
-}
-
 describe('GroundStationLayerPanel', () => {
-  it('hides the category checkboxes until opened', () => {
-    render(
-      <GroundStationLayerPanel
-        visibleCategoryIds={new Set()}
-        onToggleCategory={vi.fn()}
-        selection={null}
-      />,
-    )
-    expect(screen.queryByText('ESA Estrack')).not.toBeInTheDocument()
-  })
-
   it('lists every ground station category, unchecked by default', () => {
     render(
       <GroundStationLayerPanel
@@ -27,7 +12,6 @@ describe('GroundStationLayerPanel', () => {
         selection={null}
       />,
     )
-    openPanel()
 
     for (const category of GROUND_STATION_CATEGORIES) {
       expect(screen.getByText(category.label)).toBeInTheDocument()
@@ -45,7 +29,6 @@ describe('GroundStationLayerPanel', () => {
         selection={null}
       />,
     )
-    openPanel()
 
     const estrackRow = screen.getByText('ESA Estrack').closest('label')
     expect(estrackRow?.querySelector('input[type="checkbox"]')).toBeChecked()
@@ -60,7 +43,6 @@ describe('GroundStationLayerPanel', () => {
         selection={null}
       />,
     )
-    openPanel()
 
     const estrackRow = screen.getByText('ESA Estrack').closest('label')
     fireEvent.click(estrackRow!.querySelector('input[type="checkbox"]')!)
@@ -76,7 +58,6 @@ describe('GroundStationLayerPanel', () => {
         selection={null}
       />,
     )
-    openPanel()
     expect(screen.queryByText(/Use for pass prediction/)).not.toBeInTheDocument()
   })
 
@@ -94,7 +75,6 @@ describe('GroundStationLayerPanel', () => {
         onUseForPassPrediction={onUseForPassPrediction}
       />,
     )
-    openPanel()
 
     const nameElement = screen.getByText('Svalbard (SvalSat)')
     expect(nameElement).toBeInTheDocument()
@@ -116,7 +96,6 @@ describe('GroundStationLayerPanel', () => {
         }}
       />,
     )
-    openPanel()
 
     expect(screen.getByText('Svalbard (SvalSat)')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Use for pass prediction' })).not.toBeInTheDocument()
