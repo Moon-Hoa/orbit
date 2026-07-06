@@ -11,6 +11,7 @@ const setSpeedDaysPerSecondMock = vi.fn()
 const setDateMock = vi.fn()
 const syncToNowMock = vi.fn()
 const clearSelectionMock = vi.fn()
+const setOtherBodiesVisibleMock = vi.fn()
 
 let capturedOptions: SolarSystemSceneOptions | null = null
 
@@ -33,6 +34,7 @@ vi.mock('../three/SolarSystemScene', async (importOriginal) => {
         setDate: setDateMock,
         syncToNow: syncToNowMock,
         clearSelection: clearSelectionMock,
+        setOtherBodiesVisible: setOtherBodiesVisibleMock,
       })
     }),
   }
@@ -157,6 +159,17 @@ describe('SolarSystemViewer', () => {
       capturedOptions?.onSelectionClear?.()
     })
     expect(screen.queryByText('NASA')).not.toBeInTheDocument()
+  })
+
+  it('pushes other-bodies visibility through to scene.setOtherBodiesVisible', () => {
+    render(<SolarSystemViewer />)
+    setOtherBodiesVisibleMock.mockClear() // clear the initial-mount call
+
+    fireEvent.click(screen.getByRole('button', { name: 'Other bodies' }))
+    expect(setOtherBodiesVisibleMock).toHaveBeenLastCalledWith(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Other bodies' }))
+    expect(setOtherBodiesVisibleMock).toHaveBeenLastCalledWith(false)
   })
 
   it('calls onViewModeChange when "Body view" is clicked', () => {

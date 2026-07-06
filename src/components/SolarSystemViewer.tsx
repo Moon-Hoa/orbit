@@ -3,6 +3,7 @@ import { PLANET_LABELS } from '../engine'
 import type { SpacecraftTransit } from '../solarSystem'
 import type { MarkerScreenPosition } from '../three/markerScreenPosition'
 import { SolarSystemScene } from '../three/SolarSystemScene'
+import { OtherBodiesToggle } from './OtherBodiesToggle'
 import { SolarSystemTimeControls } from './SolarSystemTimeControls'
 import { SpacecraftTooltip } from './SpacecraftTooltip'
 import { ViewModeSelector, type ViewMode } from './ViewModeSelector'
@@ -39,6 +40,7 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
   const [inTransit, setInTransit] = useState<SpacecraftTransit[]>([])
   const [spacecraftSelection, setSpacecraftSelection] = useState<SpacecraftTransit | null>(null)
   const [markerScreenPosition, setMarkerScreenPosition] = useState<MarkerScreenPosition | null>(null)
+  const [otherBodiesVisible, setOtherBodiesVisible] = useState(false)
 
   // Mount once: create the scene and start its render loop, mirroring
   // OrbitViewer's pattern - later play/speed changes are pushed via the
@@ -76,6 +78,10 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
     sceneRef.current?.setSpeedDaysPerSecond(speedDaysPerSecond)
   }, [speedDaysPerSecond])
 
+  useEffect(() => {
+    sceneRef.current?.setOtherBodiesVisible(otherBodiesVisible)
+  }, [otherBodiesVisible])
+
   return (
     <div className="relative h-screen w-screen bg-black">
       <div ref={containerRef} className="absolute inset-0" />
@@ -99,7 +105,8 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
         )}
       </div>
 
-      <div className="absolute top-4 right-4">
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <OtherBodiesToggle isOn={otherBodiesVisible} onToggle={setOtherBodiesVisible} />
         <ViewModeSelector viewMode="solar-system" onChange={onViewModeChange} />
       </div>
 
