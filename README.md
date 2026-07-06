@@ -39,6 +39,4 @@ The 3D scene can be centered on Earth, the Moon, or Mars (`src/engine/centralBod
 
 ## Credits
 
-Earth daymap texture (`src/assets/earth-daymap.jpg`) by [Solar System Scope](https://www.solarsystemscope.com/textures/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-
-The Moon and Mars textures (`src/assets/moon-surface.svg`, `src/assets/mars-surface.svg`) are procedurally generated placeholders authored for this project (not photographic maps) - swap them for a real licensed texture (e.g. the same Solar System Scope source as Earth's) whenever that's worth doing.
+Earth daymap, Moon, and Mars surface textures (`src/assets/earth-daymap.jpg`, `moon-surface.jpg`, `mars-surface.jpg`) by [Solar System Scope](https://www.solarsystemscope.com/textures/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), via Wikimedia Commons ([Moon](https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_2k_moon.jpg), [Mars](https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_2k_mars.jpg)).
