@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { PLANET_LABELS, type PlanetId } from '../engine'
 import type { SpacecraftTransit } from '../solarSystem'
 import type { MarkerScreenPosition } from '../three/markerScreenPosition'
-import { SolarSystemScene } from '../three/SolarSystemScene'
+import { SolarSystemScene, type SolarSystemSelection } from '../three/SolarSystemScene'
+import { BodyTooltip } from './BodyTooltip'
 import { OtherBodiesToggle } from './OtherBodiesToggle'
 import { SolarSystemTimeControls } from './SolarSystemTimeControls'
 import { SpacecraftTooltip } from './SpacecraftTooltip'
@@ -38,8 +39,8 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
   const [isPlaying, setIsPlaying] = useState(false)
   const [speedDaysPerSecond, setSpeedDaysPerSecond] = useState(DEFAULT_SPEED_DAYS_PER_SECOND)
   const [inTransit, setInTransit] = useState<SpacecraftTransit[]>([])
-  const [spacecraftSelection, setSpacecraftSelection] = useState<SpacecraftTransit | null>(null)
-  const [markerScreenPosition, setMarkerScreenPosition] = useState<MarkerScreenPosition | null>(null)
+  const [selection, setSelection] = useState<SolarSystemSelection | null>(null)
+  const [selectionScreenPosition, setSelectionScreenPosition] = useState<MarkerScreenPosition | null>(null)
   const [otherBodiesVisible, setOtherBodiesVisible] = useState(false)
   const [focusedPlanet, setFocusedPlanet] = useState<PlanetId | null>(null)
 
@@ -57,9 +58,9 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
         }
       },
       onInTransitUpdate: setInTransit,
-      onSpacecraftSelect: setSpacecraftSelection,
-      onSelectionClear: () => setSpacecraftSelection(null),
-      onSelectedMarkerPositionUpdate: setMarkerScreenPosition,
+      onSelect: setSelection,
+      onSelectionClear: () => setSelection(null),
+      onSelectedPositionUpdate: setSelectionScreenPosition,
       onFocusChange: setFocusedPlanet,
     })
     sceneRef.current = scene
@@ -132,9 +133,16 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
       />
 
       <SpacecraftTooltip
-        position={markerScreenPosition}
-        selection={spacecraftSelection}
+        position={selection?.kind === 'spacecraft' ? selectionScreenPosition : null}
+        selection={selection?.kind === 'spacecraft' ? selection.transit : null}
         onDismiss={() => sceneRef.current?.clearSelection()}
+      />
+
+      <BodyTooltip
+        position={selection && selection.kind !== 'spacecraft' ? selectionScreenPosition : null}
+        selection={selection && selection.kind !== 'spacecraft' ? selection : null}
+        onDismiss={() => sceneRef.current?.clearSelection()}
+        onCenterView={(planet) => sceneRef.current?.focusOnPlanet(planet)}
       />
     </div>
   )

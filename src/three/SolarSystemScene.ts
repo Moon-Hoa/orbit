@@ -77,6 +77,32 @@ function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3
 }
 
+export interface PlanetSelection {
+  kind: 'planet'
+  planet: PlanetId
+}
+
+export interface MoonSelection {
+  kind: 'moon'
+  moon: MoonId
+}
+
+export interface OtherBodySelection {
+  kind: 'other-body'
+  body: OtherBodyId
+}
+
+export interface SpacecraftSelection {
+  kind: 'spacecraft'
+  transit: SpacecraftTransit
+}
+
+/** Anything click-to-inspect-able in this scene - a discriminated union so one selection/tooltip pipeline covers every kind. */
+export type SolarSystemSelection = SpacecraftSelection | PlanetSelection | MoonSelection | OtherBodySelection
+
+/** The non-spacecraft selection kinds - planets, moons, and other bodies, whose tooltip content is a hand-authored fact rather than mission dates (see `BodyTooltip`). */
+export type SolarSystemBodySelection = PlanetSelection | MoonSelection | OtherBodySelection
+
 export interface SolarSystemSceneOptions {
   /** The sim date to start at. Defaults to "now". */
   initialDate?: Date
@@ -84,12 +110,12 @@ export interface SolarSystemSceneOptions {
   onTick?: (date: Date) => void
   /** Called whenever the set of currently-in-transit spacecraft changes. */
   onInTransitUpdate?: (transits: SpacecraftTransit[]) => void
-  /** Called when the user clicks a visible spacecraft marker. */
-  onSpacecraftSelect?: (transit: SpacecraftTransit) => void
+  /** Called when the user clicks a selectable body (a spacecraft marker, planet, moon, or visible "other body"). */
+  onSelect?: (selection: SolarSystemSelection) => void
   /** Called whenever the current selection is dismissed (see `OrbitScene`'s identical callback). */
   onSelectionClear?: () => void
-  /** Called every frame with the selected marker's screen position, or `null` when nothing is selected. */
-  onSelectedMarkerPositionUpdate?: (position: MarkerScreenPosition | null) => void
+  /** Called every frame with the selection's screen position, or `null` when nothing is selected. */
+  onSelectedPositionUpdate?: (position: MarkerScreenPosition | null) => void
   /** Called whenever the focused planet changes (including to `null`, e.g. on reset or drag-cancel). */
   onFocusChange?: (planet: PlanetId | null) => void
 }
@@ -132,9 +158,9 @@ export class SolarSystemScene {
 
   private readonly onTick?: (date: Date) => void
   private readonly onInTransitUpdate?: (transits: SpacecraftTransit[]) => void
-  private readonly onSpacecraftSelect?: (transit: SpacecraftTransit) => void
+  private readonly onSelect?: (selection: SolarSystemSelection) => void
   private readonly onSelectionClear?: () => void
-  private readonly onSelectedMarkerPositionUpdate?: (position: MarkerScreenPosition | null) => void
+  private readonly onSelectedPositionUpdate?: (position: MarkerScreenPosition | null) => void
   private readonly onFocusChange?: (planet: PlanetId | null) => void
 
   private readonly planets = new Map<PlanetId, PlanetState>()
@@ -142,7 +168,7 @@ export class SolarSystemScene {
   private readonly otherBodies = new Map<OtherBodyId, OtherBodyState>()
   private otherBodiesVisible = false
   private readonly spacecraftMarkers = new Map<string, SpacecraftMarkerState>()
-  private selectedTransitId: string | null = null
+  private currentSelection: SolarSystemSelection | null = null
   private lastReportedInTransitIds = ''
 
   private currentDate: Date
@@ -166,9 +192,9 @@ export class SolarSystemScene {
     this.currentDate = options.initialDate ?? new Date()
     this.onTick = options.onTick
     this.onInTransitUpdate = options.onInTransitUpdate
-    this.onSpacecraftSelect = options.onSpacecraftSelect
+    this.onSelect = options.onSelect
     this.onSelectionClear = options.onSelectionClear
-    this.onSelectedMarkerPositionUpdate = options.onSelectedMarkerPositionUpdate
+    this.onSelectedPositionUpdate = options.onSelectedPositionUpdate
     this.onFocusChange = options.onFocusChange
 
     this.scene = new THREE.Scene()
@@ -348,10 +374,12 @@ export class SolarSystemScene {
    * centered as the planet moves (following it through both real-time
    * playback and date jumps - see `syncToCurrentDate`) until the user either
    * drags the camera themselves (see `handlePointerMove`) or calls
-   * `resetView`. Clicking the already-focused planet again is handled by
-   * the caller as a toggle back to the overview (mirroring the spacecraft
-   * marker's "click again to dismiss" pattern) - this method itself always
-   * (re-)focuses.
+   * `resetView`. Triggered by the "Center view" button inside a selected
+   * planet's tooltip (see `BodyTooltip`) or the "Back to overview" affordance
+   * - deliberately *not* by clicking the planet directly, since that click
+   * already means "select this body" (see `selectBody`); overloading one
+   * click with both "show info" and "move the camera" would make each
+   * action harder to trigger on purpose.
    */
   focusOnPlanet(planet: PlanetId): void {
     // Preserve whatever angle the camera is currently viewing from, rather
@@ -452,7 +480,11 @@ export class SolarSystemScene {
       .filter((state) => state.marker.visible)
       .map((state) => state.marker)
     const planetMeshes = Array.from(this.planets.values()).map((state) => state.mesh)
-    const intersectable = [...visibleMarkers, ...planetMeshes]
+    const moonMeshes = Array.from(this.moons.values()).map((state) => state.mesh)
+    const otherBodyMeshes = this.otherBodiesVisible
+      ? Array.from(this.otherBodies.values()).map((state) => state.mesh)
+      : []
+    const intersectable = [...visibleMarkers, ...planetMeshes, ...moonMeshes, ...otherBodyMeshes]
 
     const hit =
       intersectable.length > 0
@@ -469,43 +501,83 @@ export class SolarSystemScene {
 
     if (!hit) {
       this.clearSelection()
-      if (this.focusedPlanet) this.resetView() // clicking empty space also returns to the overview
       return
     }
 
     for (const [planet, state] of this.planets) {
       if (state.mesh !== hit.object) continue
-      if (this.focusedPlanet === planet) {
-        this.resetView() // clicking the already-focused planet again dismisses it
-      } else {
-        this.focusOnPlanet(planet)
-      }
+      this.selectBody({ kind: 'planet', planet })
       return
     }
-
+    for (const [moon, state] of this.moons) {
+      if (state.mesh !== hit.object) continue
+      this.selectBody({ kind: 'moon', moon })
+      return
+    }
+    for (const [body, state] of this.otherBodies) {
+      if (state.mesh !== hit.object) continue
+      this.selectBody({ kind: 'other-body', body })
+      return
+    }
     for (const state of this.spacecraftMarkers.values()) {
       if (state.marker !== hit.object) continue
-      if (this.selectedTransitId === state.transit.id) {
-        this.clearSelection() // clicking the already-selected marker again dismisses it
-        return
-      }
-      this.selectedTransitId = state.transit.id
-      this.onSpacecraftSelect?.(state.transit)
-      this.reportSelectedMarkerPosition()
+      this.selectBody({ kind: 'spacecraft', transit: state.transit })
       return
     }
   }
 
-  private reportSelectedMarkerPosition(): void {
-    if (!this.selectedTransitId) return
-    const state = this.spacecraftMarkers.get(this.selectedTransitId)
-    if (!state || !state.marker.visible) {
-      this.clearSelection() // the mission's transit window ended since it was selected
+  /** A stable string key per selection, for the "click the already-selected body again to dismiss" toggle - `null` never equals any real selection. */
+  private selectionKey(selection: SolarSystemSelection | null): string | null {
+    if (!selection) return null
+    switch (selection.kind) {
+      case 'spacecraft':
+        return `spacecraft:${selection.transit.id}`
+      case 'planet':
+        return `planet:${selection.planet}`
+      case 'moon':
+        return `moon:${selection.moon}`
+      case 'other-body':
+        return `other-body:${selection.body}`
+    }
+  }
+
+  private resolveSelectionMesh(selection: SolarSystemSelection): THREE.Mesh | undefined {
+    switch (selection.kind) {
+      case 'spacecraft':
+        return this.spacecraftMarkers.get(selection.transit.id)?.marker
+      case 'planet':
+        return this.planets.get(selection.planet)?.mesh
+      case 'moon':
+        return this.moons.get(selection.moon)?.mesh
+      case 'other-body':
+        return this.otherBodies.get(selection.body)?.mesh
+    }
+  }
+
+  private selectBody(selection: SolarSystemSelection): void {
+    if (this.selectionKey(this.currentSelection) === this.selectionKey(selection)) {
+      this.clearSelection() // clicking the already-selected body again dismisses it
       return
     }
-    this.onSelectedMarkerPositionUpdate?.(
+    this.currentSelection = selection
+    this.onSelect?.(selection)
+    this.reportSelectedPosition()
+  }
+
+  private reportSelectedPosition(): void {
+    if (!this.currentSelection) return
+    const mesh = this.resolveSelectionMesh(this.currentSelection)
+    if (!mesh || !mesh.visible) {
+      // The selection is no longer there to point at - a spacecraft's
+      // transit window ended, or an "other body" got toggled off mid-
+      // selection (planets/moons are always visible, so this only ever
+      // fires for those two kinds).
+      this.clearSelection()
+      return
+    }
+    this.onSelectedPositionUpdate?.(
       projectMarkerToScreen(
-        state.marker.position,
+        mesh.position,
         this.camera,
         this.container.clientWidth,
         this.container.clientHeight,
@@ -514,12 +586,12 @@ export class SolarSystemScene {
     )
   }
 
-  /** Dismisses the current spacecraft selection. No-ops if nothing is selected. */
+  /** Dismisses the current selection. No-ops if nothing is selected. */
   clearSelection(): void {
-    if (!this.selectedTransitId) return
-    this.selectedTransitId = null
+    if (!this.currentSelection) return
+    this.currentSelection = null
     this.onSelectionClear?.()
-    this.onSelectedMarkerPositionUpdate?.(null)
+    this.onSelectedPositionUpdate?.(null)
   }
 
   /** Repositions every planet/moon/spacecraft marker for `currentDate`, and reports in-transit changes. */
@@ -585,7 +657,7 @@ export class SolarSystemScene {
       this.stepCameraTransition()
 
       this.controls.update()
-      this.reportSelectedMarkerPosition()
+      this.reportSelectedPosition()
       this.renderer.render(this.scene, this.camera)
       this.animationFrameId = requestAnimationFrame(tick)
     }

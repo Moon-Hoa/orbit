@@ -13,6 +13,7 @@ const syncToNowMock = vi.fn()
 const clearSelectionMock = vi.fn()
 const setOtherBodiesVisibleMock = vi.fn()
 const resetViewMock = vi.fn()
+const focusOnPlanetMock = vi.fn()
 
 let capturedOptions: SolarSystemSceneOptions | null = null
 
@@ -37,6 +38,7 @@ vi.mock('../three/SolarSystemScene', async (importOriginal) => {
         clearSelection: clearSelectionMock,
         setOtherBodiesVisible: setOtherBodiesVisibleMock,
         resetView: resetViewMock,
+        focusOnPlanet: focusOnPlanetMock,
       })
     }),
   }
@@ -130,8 +132,8 @@ describe('SolarSystemViewer', () => {
   it('shows a tooltip once a spacecraft is selected and its screen position is reported', () => {
     render(<SolarSystemViewer />)
     act(() => {
-      capturedOptions?.onSpacecraftSelect?.(perseverance)
-      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
+      capturedOptions?.onSelect?.({ kind: 'spacecraft', transit: perseverance })
+      capturedOptions?.onSelectedPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
     })
 
     expect(screen.getByText('Perseverance (Mars 2020)')).toBeInTheDocument()
@@ -141,8 +143,8 @@ describe('SolarSystemViewer', () => {
   it('calls scene.clearSelection when the tooltip is dismissed', () => {
     render(<SolarSystemViewer />)
     act(() => {
-      capturedOptions?.onSpacecraftSelect?.(perseverance)
-      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
+      capturedOptions?.onSelect?.({ kind: 'spacecraft', transit: perseverance })
+      capturedOptions?.onSelectedPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
@@ -152,8 +154,8 @@ describe('SolarSystemViewer', () => {
   it('clears the tooltip when the scene reports the selection cleared', () => {
     render(<SolarSystemViewer />)
     act(() => {
-      capturedOptions?.onSpacecraftSelect?.(perseverance)
-      capturedOptions?.onSelectedMarkerPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
+      capturedOptions?.onSelect?.({ kind: 'spacecraft', transit: perseverance })
+      capturedOptions?.onSelectedPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
     })
     expect(screen.getByText('Perseverance (Mars 2020)')).toBeInTheDocument()
 
@@ -161,6 +163,53 @@ describe('SolarSystemViewer', () => {
       capturedOptions?.onSelectionClear?.()
     })
     expect(screen.queryByText('NASA')).not.toBeInTheDocument()
+  })
+
+  it('shows a BodyTooltip with a "Center view" button when a planet is selected, wired to scene.focusOnPlanet', () => {
+    render(<SolarSystemViewer />)
+    act(() => {
+      capturedOptions?.onSelect?.({ kind: 'planet', planet: 'jupiter' })
+      capturedOptions?.onSelectedPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
+    })
+
+    expect(screen.getByText('Jupiter')).toBeInTheDocument()
+    const centerViewButton = screen.getByRole('button', { name: 'Center view' })
+    fireEvent.click(centerViewButton)
+    expect(focusOnPlanetMock).toHaveBeenCalledWith('jupiter')
+  })
+
+  it('shows a BodyTooltip with no "Center view" button when a moon is selected', () => {
+    render(<SolarSystemViewer />)
+    act(() => {
+      capturedOptions?.onSelect?.({ kind: 'moon', moon: 'titan' })
+      capturedOptions?.onSelectedPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
+    })
+
+    expect(screen.getByText('Titan')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Center view' })).not.toBeInTheDocument()
+  })
+
+  it('shows a BodyTooltip with no "Center view" button when an other body is selected', () => {
+    render(<SolarSystemViewer />)
+    act(() => {
+      capturedOptions?.onSelect?.({ kind: 'other-body', body: 'pluto' })
+      capturedOptions?.onSelectedPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
+    })
+
+    expect(screen.getByText('Pluto')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Center view' })).not.toBeInTheDocument()
+  })
+
+  it('calls scene.clearSelection when a BodyTooltip is dismissed', () => {
+    render(<SolarSystemViewer />)
+    clearSelectionMock.mockClear() // clear any calls from earlier tests in this file
+    act(() => {
+      capturedOptions?.onSelect?.({ kind: 'planet', planet: 'mars' })
+      capturedOptions?.onSelectedPositionUpdate?.({ xPx: 200, yPx: 100, occluded: false })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(clearSelectionMock).toHaveBeenCalledTimes(1)
   })
 
   it('pushes other-bodies visibility through to scene.setOtherBodiesVisible', () => {
