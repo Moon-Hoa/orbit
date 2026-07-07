@@ -25,8 +25,13 @@ import { type ClosestApproachResult, findClosestApproach } from './closestApproa
 import { CENTRAL_BODY_RADIUS_SCENE_UNITS, setCentralBodyRadiusKm } from './constants'
 import { eciToScene } from './coordinates'
 import { createEarth } from './createEarth'
+import { createJupiter } from './createJupiter'
 import { createMars } from './createMars'
+import { createMercury } from './createMercury'
 import { createMoon } from './createMoon'
+import { createNeptune } from './createNeptune'
+import { createUranus } from './createUranus'
+import { createVenus } from './createVenus'
 import { type MarkerScreenPosition, projectMarkerToScreen } from './markerScreenPosition'
 import { DEFAULT_ORBIT_PATH_COLOR, createOrbitPath } from './createOrbitPath'
 import { DEFAULT_MARKER_COLOR, createSatelliteMarker } from './createSatelliteMarker'
@@ -49,6 +54,16 @@ function createCentralBodyMesh(id: CentralBodyId): THREE.Mesh {
       return createMoon()
     case 'mars':
       return createMars()
+    case 'mercury':
+      return createMercury()
+    case 'venus':
+      return createVenus()
+    case 'jupiter':
+      return createJupiter()
+    case 'uranus':
+      return createUranus()
+    case 'neptune':
+      return createNeptune()
   }
 }
 

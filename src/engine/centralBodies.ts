@@ -1,13 +1,23 @@
 import {
   EARTH_MU_KM3_S2,
   EARTH_RADIUS_KM,
+  JUPITER_MU_KM3_S2,
+  JUPITER_RADIUS_KM,
   MARS_MU_KM3_S2,
   MARS_RADIUS_KM,
+  MERCURY_MU_KM3_S2,
+  MERCURY_RADIUS_KM,
   MOON_MU_KM3_S2,
   MOON_RADIUS_KM,
+  NEPTUNE_MU_KM3_S2,
+  NEPTUNE_RADIUS_KM,
+  URANUS_MU_KM3_S2,
+  URANUS_RADIUS_KM,
+  VENUS_MU_KM3_S2,
+  VENUS_RADIUS_KM,
 } from './constants'
 
-export type CentralBodyId = 'earth' | 'moon' | 'mars'
+export type CentralBodyId = 'earth' | 'moon' | 'mars' | 'mercury' | 'venus' | 'jupiter' | 'uranus' | 'neptune'
 
 export interface CentralBodyInfo {
   id: CentralBodyId
@@ -43,6 +53,41 @@ export const CENTRAL_BODIES: Record<CentralBodyId, CentralBodyInfo> = {
     label: 'Mars',
     muKm3S2: MARS_MU_KM3_S2,
     radiusKm: MARS_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
+  mercury: {
+    id: 'mercury',
+    label: 'Mercury',
+    muKm3S2: MERCURY_MU_KM3_S2,
+    radiusKm: MERCURY_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
+  venus: {
+    id: 'venus',
+    label: 'Venus',
+    muKm3S2: VENUS_MU_KM3_S2,
+    radiusKm: VENUS_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
+  jupiter: {
+    id: 'jupiter',
+    label: 'Jupiter',
+    muKm3S2: JUPITER_MU_KM3_S2,
+    radiusKm: JUPITER_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
+  uranus: {
+    id: 'uranus',
+    label: 'Uranus',
+    muKm3S2: URANUS_MU_KM3_S2,
+    radiusKm: URANUS_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
+  neptune: {
+    id: 'neptune',
+    label: 'Neptune',
+    muKm3S2: NEPTUNE_MU_KM3_S2,
+    radiusKm: NEPTUNE_RADIUS_KM,
     hasEarthOnlyFeatures: false,
   },
 }
