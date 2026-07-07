@@ -12,6 +12,7 @@ const setDateMock = vi.fn()
 const syncToNowMock = vi.fn()
 const clearSelectionMock = vi.fn()
 const setOtherBodiesVisibleMock = vi.fn()
+const resetViewMock = vi.fn()
 
 let capturedOptions: SolarSystemSceneOptions | null = null
 
@@ -35,6 +36,7 @@ vi.mock('../three/SolarSystemScene', async (importOriginal) => {
         syncToNow: syncToNowMock,
         clearSelection: clearSelectionMock,
         setOtherBodiesVisible: setOtherBodiesVisibleMock,
+        resetView: resetViewMock,
       })
     }),
   }
@@ -170,6 +172,37 @@ describe('SolarSystemViewer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Other bodies' }))
     expect(setOtherBodiesVisibleMock).toHaveBeenLastCalledWith(false)
+  })
+
+  it('shows no "Back to overview" button until the scene reports a focused planet', () => {
+    render(<SolarSystemViewer />)
+    expect(screen.queryByText(/Back to overview/)).not.toBeInTheDocument()
+  })
+
+  it('shows "Back to overview" once the scene reports a focus change, and calls resetView when clicked', () => {
+    render(<SolarSystemViewer />)
+    act(() => {
+      capturedOptions?.onFocusChange?.('mars')
+    })
+
+    const button = screen.getByRole('button', { name: /Back to overview \(Mars\)/ })
+    expect(button).toBeInTheDocument()
+
+    fireEvent.click(button)
+    expect(resetViewMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides "Back to overview" once the scene reports focus cleared', () => {
+    render(<SolarSystemViewer />)
+    act(() => {
+      capturedOptions?.onFocusChange?.('jupiter')
+    })
+    expect(screen.getByText(/Back to overview/)).toBeInTheDocument()
+
+    act(() => {
+      capturedOptions?.onFocusChange?.(null)
+    })
+    expect(screen.queryByText(/Back to overview/)).not.toBeInTheDocument()
   })
 
   it('calls onViewModeChange when "Body view" is clicked', () => {

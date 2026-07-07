@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { PLANET_LABELS } from '../engine'
+import { PLANET_LABELS, type PlanetId } from '../engine'
 import type { SpacecraftTransit } from '../solarSystem'
 import type { MarkerScreenPosition } from '../three/markerScreenPosition'
 import { SolarSystemScene } from '../three/SolarSystemScene'
@@ -41,6 +41,7 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
   const [spacecraftSelection, setSpacecraftSelection] = useState<SpacecraftTransit | null>(null)
   const [markerScreenPosition, setMarkerScreenPosition] = useState<MarkerScreenPosition | null>(null)
   const [otherBodiesVisible, setOtherBodiesVisible] = useState(false)
+  const [focusedPlanet, setFocusedPlanet] = useState<PlanetId | null>(null)
 
   // Mount once: create the scene and start its render loop, mirroring
   // OrbitViewer's pattern - later play/speed changes are pushed via the
@@ -59,6 +60,7 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
       onSpacecraftSelect: setSpacecraftSelection,
       onSelectionClear: () => setSpacecraftSelection(null),
       onSelectedMarkerPositionUpdate: setMarkerScreenPosition,
+      onFocusChange: setFocusedPlanet,
     })
     sceneRef.current = scene
     scene.start()
@@ -105,7 +107,16 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
         )}
       </div>
 
-      <div className="absolute top-4 right-4 flex items-center gap-2">
+      <div className="absolute top-4 right-4 flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-end gap-2">
+        {focusedPlanet && (
+          <button
+            type="button"
+            onClick={() => sceneRef.current?.resetView()}
+            className="rounded-lg bg-slate-900/80 px-3 py-1.5 text-sm text-slate-200 backdrop-blur hover:bg-slate-800"
+          >
+            ← Back to overview ({PLANET_LABELS[focusedPlanet]})
+          </button>
+        )}
         <OtherBodiesToggle isOn={otherBodiesVisible} onToggle={setOtherBodiesVisible} />
         <ViewModeSelector viewMode="solar-system" onChange={onViewModeChange} />
       </div>
