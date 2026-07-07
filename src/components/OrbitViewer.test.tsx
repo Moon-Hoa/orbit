@@ -284,7 +284,7 @@ describe('OrbitViewer', () => {
 
   it('shows in-sunlight/in-eclipse based on shadowFraction once tracking a real satellite', async () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
 
     act(() => {
@@ -352,7 +352,7 @@ describe('OrbitViewer', () => {
   it('announces mode switches in the aria-live region', () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     expect(screen.getByRole('status')).toHaveTextContent('Track real satellite mode')
 
     fireEvent.click(screen.getByRole('button', { name: 'Design orbit' }))
@@ -369,7 +369,7 @@ describe('OrbitViewer', () => {
   it('announces the auto-selected ISS when entering track-real mode', async () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
 
     expect(screen.getByRole('status')).toHaveTextContent('Tracking ISS (ZARYA), NORAD 25544')
@@ -422,7 +422,7 @@ describe('OrbitViewer', () => {
     render(<OrbitViewer />)
 
     expect(screen.getByLabelText('a value')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
 
     expect(fetchByNoradIdMock).toHaveBeenCalledWith('25544')
     await screen.findByText('ISS (ZARYA)')
@@ -438,7 +438,7 @@ describe('OrbitViewer', () => {
     searchByNameMock.mockResolvedValue([NAUKA_TLE])
 
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
     setRealSatelliteMock.mockClear()
 
@@ -500,7 +500,7 @@ describe('OrbitViewer URL scenario sync', () => {
     render(<OrbitViewer />)
     const historyLengthBefore = window.history.length
 
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
 
     expect(window.history.length).toBe(historyLengthBefore + 1)
@@ -578,7 +578,7 @@ describe('OrbitViewer companions', () => {
     searchByNameMock.mockResolvedValue([NAUKA_TLE])
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
     setRealSatelliteMock.mockClear()
 
@@ -706,7 +706,7 @@ describe('OrbitViewer bulk companions', () => {
       fakeTle('10007', 'Sat G'),
     ])
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
 
     fireEvent.change(screen.getByLabelText('Satellite search'), { target: { value: 'sat' } })
@@ -727,7 +727,7 @@ describe('OrbitViewer bulk companions', () => {
 
   it('bulk-adds every valid TLE from a pasted multi-record block as a companion', async () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
 
     fireEvent.click(screen.getByRole('button', { name: 'Paste TLE mode' }))
@@ -773,7 +773,7 @@ describe('OrbitViewer ground stations', () => {
 
   it('feeds a selected ground station into GroundStationPanel once "Use for pass prediction" is clicked, in track-real mode', async () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
 
     act(() => {
@@ -913,6 +913,17 @@ function selectCentralBody(label: string) {
   fireEvent.click(screen.getByRole('button', { name: label }))
 }
 
+/** Opens the Settings dropdown - the mode toggle and export controls live there now (see the Settings-relocation issue). */
+function openSettings() {
+  fireEvent.click(screen.getByLabelText('Settings'))
+}
+
+/** Opens Settings and switches to track-real mode. Settings stays open afterward - toggles inside it don't auto-close it. */
+function enterTrackRealMode() {
+  openSettings()
+  fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+}
+
 describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
   it('calls scene.setCentralBody when a different body is selected', () => {
     render(<OrbitViewer />)
@@ -935,34 +946,35 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
     expect(screen.queryByRole('button', { name: 'ISS' })).not.toBeInTheDocument()
   })
 
-  it('disables "Track real satellite" once a non-Earth body is selected', () => {
+  it('hides "Track real satellite" entirely once a non-Earth body is selected', () => {
     render(<OrbitViewer />)
 
     selectCentralBody('Moon')
+    openSettings()
 
-    expect(screen.getByRole('button', { name: 'Track real satellite' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Track real satellite' })).not.toBeInTheDocument()
   })
 
   it('falls back to design mode when switching away from Earth while tracking a real satellite', async () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+    enterTrackRealMode()
     await screen.findByText('ISS (ZARYA)')
-    expect(screen.getByRole('button', { name: 'Track real satellite' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    // SatelliteSearch (track-real mode's UI) is showing, not ElementPanel (design mode's).
+    expect(screen.queryByLabelText('a value')).not.toBeInTheDocument()
 
+    // Moon hides the mode toggle entirely (Earth-only), so the only way to
+    // observe the fallback here is via which mode's UI is now showing.
     selectCentralBody('Moon')
 
-    expect(screen.getByRole('button', { name: 'Design orbit' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('a value')).toBeInTheDocument()
   })
 
   it('hides ground-station/all-satellites/ground-track/export controls once a non-Earth body is selected', () => {
     render(<OrbitViewer />)
 
     selectCentralBody('Moon')
-    fireEvent.click(screen.getByLabelText('Settings'))
+    openSettings()
 
     expect(screen.queryByRole('button', { name: 'All satellites' })).not.toBeInTheDocument()
     expect(screen.queryByText('Ground stations')).not.toBeInTheDocument()
@@ -975,11 +987,11 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
 
     selectCentralBody('Moon')
     selectCentralBody('Earth')
-    fireEvent.click(screen.getByLabelText('Settings'))
+    openSettings()
 
     expect(screen.getByRole('button', { name: 'All satellites' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ISS' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Track real satellite' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Track real satellite' })).toBeInTheDocument()
   })
 })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { EphemerisRow } from './ephemeris'
+import type { EphemerisRow, InertialEphemerisRow } from './ephemeris'
 import { buildEphemerisCsv } from './csv'
 
 const sampleRows: EphemerisRow[] = [
@@ -63,5 +63,22 @@ describe('buildEphemerisCsv', () => {
     const csv = buildEphemerisCsv(sampleRows)
     const [, , secondRow] = parseCsv(csv)
     expect(secondRow[1]).toBe('')
+  })
+
+  it('leaves the geodetic columns empty for rows with no geodetic subpoint (non-Earth bodies)', () => {
+    const inertialRows: InertialEphemerisRow[] = [
+      {
+        elapsedSeconds: 0,
+        timestampIso: null,
+        position: { x: 1000, y: 2000, z: 3000 },
+        velocity: { x: 1, y: 2, z: 3 },
+      },
+    ]
+
+    const csv = buildEphemerisCsv(inertialRows)
+    const [, row] = parseCsv(csv)
+
+    expect(row).toHaveLength(11) // same column count as the Earth shape, just blank at the end
+    expect(row.slice(8)).toEqual(['', '', ''])
   })
 })

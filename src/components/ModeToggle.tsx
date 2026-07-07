@@ -3,20 +3,24 @@ export type ViewerMode = 'design' | 'track-real'
 interface ModeToggleProps {
   mode: ViewerMode
   onChange: (mode: ViewerMode) => void
-  /** Disables the "Track real satellite" option - used when a non-Earth body is selected, since Celestrak has no Moon/Mars catalog. */
-  disableTrackReal?: boolean
 }
 
-/** Toggle between designing a synthetic orbit and tracking a real satellite. */
-export function ModeToggle({ mode, onChange, disableTrackReal = false }: ModeToggleProps) {
+/**
+ * Toggle between designing a synthetic orbit and tracking a real satellite -
+ * lives inside `SettingsPanel`'s Earth-only section (real-satellite tracking
+ * has no Moon/Mars catalog), so unlike its previous top-bar incarnation it
+ * no longer needs a "disable Track real satellite for non-Earth bodies"
+ * option - it's simply not rendered at all for those bodies.
+ */
+export function ModeToggle({ mode, onChange }: ModeToggleProps) {
   return (
-    <div className="flex overflow-hidden rounded-lg bg-slate-900/80 backdrop-blur">
+    <div className="flex overflow-hidden rounded">
       <button
         type="button"
         onClick={() => onChange('design')}
         aria-pressed={mode === 'design'}
-        className={`px-3 py-1.5 text-sm ${
-          mode === 'design' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-800'
+        className={`flex-1 px-2 py-1 ${
+          mode === 'design' ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-300'
         }`}
       >
         Design orbit
@@ -24,11 +28,9 @@ export function ModeToggle({ mode, onChange, disableTrackReal = false }: ModeTog
       <button
         type="button"
         onClick={() => onChange('track-real')}
-        disabled={disableTrackReal}
         aria-pressed={mode === 'track-real'}
-        title={disableTrackReal ? 'Only available for Earth' : undefined}
-        className={`px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 ${
-          mode === 'track-real' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-800'
+        className={`flex-1 px-2 py-1 ${
+          mode === 'track-real' ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-300'
         }`}
       >
         Track real satellite

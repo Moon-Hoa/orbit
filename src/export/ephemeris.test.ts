@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { EARTH_RADIUS_KM, orbitalPeriodSeconds, type OrbitalElements } from '../engine'
+import { EARTH_RADIUS_KM, MOON_MU_KM3_S2, MOON_RADIUS_KM, orbitalPeriodSeconds, type OrbitalElements } from '../engine'
 import type { TleRecord } from '../satellite'
-import { sampleDesignEphemeris, sampleRealEphemeris } from './ephemeris'
+import { sampleDesignEphemeris, sampleDesignEphemerisInertial, sampleRealEphemeris } from './ephemeris'
 
 const degToRad = (deg: number) => (deg * Math.PI) / 180
 
@@ -11,6 +11,15 @@ const issLikeElements: OrbitalElements = {
   inclinationRad: degToRad(51.6),
   raanRad: degToRad(45),
   argOfPerigeeRad: degToRad(30),
+  trueAnomalyRad: 0,
+}
+
+const lowLunarOrbitElements: OrbitalElements = {
+  semiMajorAxisKm: MOON_RADIUS_KM + 100,
+  eccentricity: 0,
+  inclinationRad: degToRad(90),
+  raanRad: 0,
+  argOfPerigeeRad: 0,
   trueAnomalyRad: 0,
 }
 
@@ -47,6 +56,36 @@ describe('sampleDesignEphemeris', () => {
       expect(row.geodetic.latitudeRad).toBeGreaterThanOrEqual(-Math.PI / 2)
       expect(row.geodetic.latitudeRad).toBeLessThanOrEqual(Math.PI / 2)
     }
+  })
+})
+
+describe('sampleDesignEphemerisInertial', () => {
+  it("spans exactly one orbital period for 'next-orbit', using the given body's mu", () => {
+    const rows = sampleDesignEphemerisInertial(lowLunarOrbitElements, 'next-orbit', MOON_MU_KM3_S2)
+    const period = orbitalPeriodSeconds(lowLunarOrbitElements.semiMajorAxisKm, MOON_MU_KM3_S2)
+    expect(rows[0].elapsedSeconds).toBe(0)
+    expect(rows.at(-1)?.elapsedSeconds).toBeCloseTo(period, 6)
+  })
+
+  it('has no real-calendar timestamp (design mode)', () => {
+    const rows = sampleDesignEphemerisInertial(lowLunarOrbitElements, 'next-orbit', MOON_MU_KM3_S2)
+    expect(rows.every((r) => r.timestampIso === null)).toBe(true)
+  })
+
+  it('produces finite position/velocity vectors and no geodetic field', () => {
+    const rows = sampleDesignEphemerisInertial(lowLunarOrbitElements, 'next-orbit', MOON_MU_KM3_S2)
+    for (const row of rows) {
+      expect(Number.isFinite(row.position.x)).toBe(true)
+      expect(Number.isFinite(row.velocity.x)).toBe(true)
+      expect('geodetic' in row).toBe(false)
+    }
+  })
+
+  it("differs from Earth's sampler given the same elements but a different mu (period scales with mu)", () => {
+    const moonRows = sampleDesignEphemerisInertial(issLikeElements, 'next-orbit', MOON_MU_KM3_S2)
+    const earthPeriod = orbitalPeriodSeconds(issLikeElements.semiMajorAxisKm)
+    // The same semi-major axis around the much-less-massive Moon has a far longer period than around Earth.
+    expect(moonRows.at(-1)!.elapsedSeconds).toBeGreaterThan(earthPeriod)
   })
 })
 

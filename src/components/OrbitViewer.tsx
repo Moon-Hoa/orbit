@@ -33,12 +33,11 @@ import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
 import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
-import { ExportControls } from './ExportControls'
 import { formatElapsed } from './formatElapsed'
 import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView, type GroundTrack } from './GroundTrackView'
 import { MarkerTooltip } from './MarkerTooltip'
-import { ModeToggle, type ViewerMode } from './ModeToggle'
+import type { ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
 import { SatelliteSearch } from './SatelliteSearch'
 import { SettingsPanel } from './SettingsPanel'
@@ -620,20 +619,17 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
             centralBody={centralBodyId}
             onCentralBodyChange={changeCentralBody}
           />
-          <ModeToggle
-            mode={mode}
-            onChange={(nextMode) => {
-              markDiscreteChange()
-              setMode(nextMode)
-              announce(nextMode === 'design' ? 'Design orbit mode' : 'Track real satellite mode')
-            }}
-            disableTrackReal={!currentBody.hasEarthOnlyFeatures}
-          />
           <ShareButton getShareUrl={getShareUrl} />
           <SettingsPanel
             unitSystem={unitSystem}
             onUnitSystemChange={setUnitSystem}
             centralBody={centralBodyId}
+            mode={mode}
+            onModeChange={(nextMode) => {
+              markDiscreteChange()
+              setMode(nextMode)
+              announce(nextMode === 'design' ? 'Design orbit mode' : 'Track real satellite mode')
+            }}
             onToggleSatelliteSwarm={setSatelliteSwarmVisible}
             visibleGroundStationCategories={visibleGroundStationCategories}
             onToggleGroundStationCategory={toggleGroundStationCategory}
@@ -641,18 +637,16 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
             onToggleCelestialCategory={toggleCelestialObjectCategory}
             celestialOrbitersVisible={celestialOrbitersVisible}
             onToggleCelestialOrbiters={setOrbitersVisible}
+            exportLabel={primaryLabel}
+            isTrackingReal={isTrackingReal}
+            elements={elements}
+            enableJ2={enableJ2}
+            tle={selectedTle}
           />
         </div>
         {currentBody.hasEarthOnlyFeatures && (
           <div className="flex max-h-[60vh] w-full flex-col items-end gap-2 overflow-y-auto">
             <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />
-            <ExportControls
-              label={primaryLabel}
-              isTrackingReal={isTrackingReal}
-              elements={elements}
-              enableJ2={enableJ2}
-              tle={selectedTle}
-            />
           </div>
         )}
       </div>

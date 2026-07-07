@@ -24,6 +24,18 @@ export interface EphemerisRow {
   geodetic: GeodeticCoordinates
 }
 
+/**
+ * Like {@link EphemerisRow}, but without a geodetic subpoint - for central
+ * bodies this app has no rotating-frame model for (see
+ * {@link sampleDesignEphemerisInertial}).
+ */
+export interface InertialEphemerisRow {
+  elapsedSeconds: number
+  timestampIso: string | null
+  position: Vector3
+  velocity: Vector3
+}
+
 export type ExportWindow = 'next-orbit' | 'next-24h'
 
 const SAMPLE_COUNT = 200
@@ -55,6 +67,42 @@ export function sampleDesignEphemeris(
       position: state.position,
       velocity: state.velocity,
       geodetic: eciToGeodetic(state.position, t),
+    })
+  }
+
+  return rows
+}
+
+/**
+ * Samples a design-mode (two-body) orbit's ephemeris around a non-Earth
+ * central body, over `exportWindow` - like {@link sampleDesignEphemeris},
+ * but without a geodetic subpoint. "Ground track" means a lat/lon subpoint
+ * in a body-fixed *rotating* frame, and this app only models that rotation
+ * for Earth (`eciToGeodetic` hardcodes `EARTH_ROTATION_RATE_RAD_S`/
+ * `EARTH_RADIUS_KM`) - the Moon, Mars, and the other central bodies each
+ * have their own real rotation periods (some retrograde, like Venus) that
+ * this app doesn't model, so computing a geodetic subpoint for them would
+ * be fabricated, not derived. The position/velocity alone are still
+ * meaningful: a body-centered inertial-frame trajectory, exactly what the
+ * 3D scene already renders - see the Settings-relocation issue.
+ */
+export function sampleDesignEphemerisInertial(
+  elements: OrbitalElements,
+  exportWindow: ExportWindow,
+  muKm3S2: number,
+  enableJ2 = false,
+): InertialEphemerisRow[] {
+  const totalSeconds = windowSeconds(exportWindow, orbitalPeriodSeconds(elements.semiMajorAxisKm, muKm3S2))
+  const rows: InertialEphemerisRow[] = []
+
+  for (let i = 0; i <= SAMPLE_COUNT; i++) {
+    const t = (i / SAMPLE_COUNT) * totalSeconds
+    const state = propagateToStateVector(elements, t, muKm3S2, enableJ2)
+    rows.push({
+      elapsedSeconds: t,
+      timestampIso: null,
+      position: state.position,
+      velocity: state.velocity,
     })
   }
 

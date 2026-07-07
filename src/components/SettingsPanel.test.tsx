@@ -1,6 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { EARTH_RADIUS_KM, type OrbitalElements } from '../engine'
 import { SettingsPanel } from './SettingsPanel'
+
+const designElements: OrbitalElements = {
+  semiMajorAxisKm: EARTH_RADIUS_KM + 408,
+  eccentricity: 0.0007,
+  inclinationRad: (51.6 * Math.PI) / 180,
+  raanRad: 0,
+  argOfPerigeeRad: 0,
+  trueAnomalyRad: 0,
+}
 
 function renderPanel(overrides: Partial<Parameters<typeof SettingsPanel>[0]> = {}) {
   return render(
@@ -8,6 +18,8 @@ function renderPanel(overrides: Partial<Parameters<typeof SettingsPanel>[0]> = {
       unitSystem="metric"
       onUnitSystemChange={vi.fn()}
       centralBody="earth"
+      mode="design"
+      onModeChange={vi.fn()}
       onToggleSatelliteSwarm={vi.fn().mockResolvedValue(undefined)}
       visibleGroundStationCategories={new Set()}
       onToggleGroundStationCategory={vi.fn()}
@@ -15,6 +27,11 @@ function renderPanel(overrides: Partial<Parameters<typeof SettingsPanel>[0]> = {
       onToggleCelestialCategory={vi.fn()}
       celestialOrbitersVisible={false}
       onToggleCelestialOrbiters={vi.fn()}
+      exportLabel="Design orbit"
+      isTrackingReal={false}
+      elements={designElements}
+      enableJ2={false}
+      tle={null}
       {...overrides}
     />,
   )
@@ -86,5 +103,49 @@ describe('SettingsPanel', () => {
     fireEvent.click(row!.querySelector('input[type="checkbox"]')!)
 
     expect(onToggleCelestialCategory).toHaveBeenCalledWith('mars-landers', true)
+  })
+
+  describe('Mode section', () => {
+    it('shows the design/track-real toggle on Earth', () => {
+      renderPanel({ centralBody: 'earth' })
+      openSettings()
+
+      expect(screen.getByRole('button', { name: 'Design orbit' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Track real satellite' })).toBeInTheDocument()
+    })
+
+    it('hides the mode toggle entirely on non-Earth bodies', () => {
+      renderPanel({ centralBody: 'moon' })
+      openSettings()
+
+      expect(screen.queryByRole('button', { name: 'Track real satellite' })).not.toBeInTheDocument()
+    })
+
+    it('calls onModeChange when a mode is picked', () => {
+      const onModeChange = vi.fn()
+      renderPanel({ centralBody: 'earth', onModeChange })
+      openSettings()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Track real satellite' }))
+      expect(onModeChange).toHaveBeenCalledWith('track-real')
+    })
+  })
+
+  describe('Export section', () => {
+    it('shows both Export KML and Export CSV on Earth', () => {
+      renderPanel({ centralBody: 'earth' })
+      openSettings()
+
+      expect(screen.getByRole('button', { name: 'Export KML' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Export CSV' })).toBeInTheDocument()
+    })
+
+    it('shows only Export CSV on a non-Earth body', () => {
+      renderPanel({ centralBody: 'moon' })
+      openSettings()
+
+      expect(screen.queryByRole('button', { name: 'Export KML' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Export CSV' })).toBeInTheDocument()
+    })
   })
 })
