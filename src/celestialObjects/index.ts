@@ -13,6 +13,7 @@ export const CENTRAL_BODY_SURFACE_OBJECT_CATEGORIES: Record<CentralBodyId, Surfa
   mercury: [],
   venus: [],
   jupiter: [],
+  saturn: [],
   uranus: [],
   neptune: [],
 }
@@ -25,6 +26,7 @@ export const CENTRAL_BODY_ORBITERS: Record<CentralBodyId, Orbiter[]> = {
   mercury: [],
   venus: [],
   jupiter: [],
+  saturn: [],
   uranus: [],
   neptune: [],
 }

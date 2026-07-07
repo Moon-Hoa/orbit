@@ -16,6 +16,8 @@ import {
   MOON_RADIUS_KM,
   NEPTUNE_MU_KM3_S2,
   NEPTUNE_RADIUS_KM,
+  SATURN_MU_KM3_S2,
+  SATURN_RADIUS_KM,
   URANUS_MU_KM3_S2,
   URANUS_RADIUS_KM,
   VENUS_MU_KM3_S2,
@@ -28,9 +30,9 @@ describe('CENTRAL_BODIES registry', () => {
     expect(DEFAULT_CENTRAL_BODY_ID).toBe('earth')
   })
 
-  it('lists exactly earth, moon, mars, mercury, venus, jupiter, uranus, and neptune', () => {
+  it('lists exactly earth, moon, mars, mercury, venus, jupiter, saturn, uranus, and neptune', () => {
     expect(new Set(CENTRAL_BODY_IDS)).toEqual(
-      new Set(['earth', 'moon', 'mars', 'mercury', 'venus', 'jupiter', 'uranus', 'neptune']),
+      new Set(['earth', 'moon', 'mars', 'mercury', 'venus', 'jupiter', 'saturn', 'uranus', 'neptune']),
     )
   })
 
@@ -51,6 +53,8 @@ describe('CENTRAL_BODIES registry', () => {
     expect(CENTRAL_BODIES.venus.radiusKm).toBe(VENUS_RADIUS_KM)
     expect(CENTRAL_BODIES.jupiter.muKm3S2).toBe(JUPITER_MU_KM3_S2)
     expect(CENTRAL_BODIES.jupiter.radiusKm).toBe(JUPITER_RADIUS_KM)
+    expect(CENTRAL_BODIES.saturn.muKm3S2).toBe(SATURN_MU_KM3_S2)
+    expect(CENTRAL_BODIES.saturn.radiusKm).toBe(SATURN_RADIUS_KM)
     expect(CENTRAL_BODIES.uranus.muKm3S2).toBe(URANUS_MU_KM3_S2)
     expect(CENTRAL_BODIES.uranus.radiusKm).toBe(URANUS_RADIUS_KM)
     expect(CENTRAL_BODIES.neptune.muKm3S2).toBe(NEPTUNE_MU_KM3_S2)
@@ -66,9 +70,10 @@ describe('isCentralBodyId', () => {
     expect(isCentralBodyId('mercury')).toBe(true)
     expect(isCentralBodyId('venus')).toBe(true)
     expect(isCentralBodyId('jupiter')).toBe(true)
+    expect(isCentralBodyId('saturn')).toBe(true)
     expect(isCentralBodyId('uranus')).toBe(true)
     expect(isCentralBodyId('neptune')).toBe(true)
-    expect(isCentralBodyId('saturn')).toBe(false)
+    expect(isCentralBodyId('pluto')).toBe(false)
     expect(isCentralBodyId(null)).toBe(false)
     expect(isCentralBodyId('')).toBe(false)
   })
@@ -88,6 +93,12 @@ describe('known-answer physical sanity checks (see Moon/Mars view issues)', () =
     )
     const periodSeconds = orbitalPeriodSeconds(areostationarySemiMajorAxisKm, MARS_MU_KM3_S2)
     expect(periodSeconds).toBeCloseTo(marsSiderealDaySeconds, 0)
+  })
+
+  it("an orbit at Titan's real semi-major axis around Saturn matches Titan's real ~15.95-day period", () => {
+    const titanSemiMajorAxisKm = 1_221_830
+    const periodDays = orbitalPeriodSeconds(titanSemiMajorAxisKm, SATURN_MU_KM3_S2) / 86_400
+    expect(periodDays).toBeCloseTo(15.95, 1)
   })
 
   // A 200 km altitude circular orbit's period, cross-checked against the

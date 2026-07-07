@@ -141,7 +141,7 @@ describe('decodeScenario robustness', () => {
     expect(missing?.centralBody).toBe('earth')
 
     const bogus = decodeScenario(
-      new URLSearchParams('mode=design&speed=60&a=6786&e=0&i=0&raan=0&argp=0&nu=0&body=saturn'),
+      new URLSearchParams('mode=design&speed=60&a=6786&e=0&i=0&raan=0&argp=0&nu=0&body=pluto'),
     )
     expect(bogus?.centralBody).toBe('earth')
   })

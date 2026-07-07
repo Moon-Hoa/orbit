@@ -30,6 +30,7 @@ import { createMars } from './createMars'
 import { createMercury } from './createMercury'
 import { createMoon } from './createMoon'
 import { createNeptune } from './createNeptune'
+import { createSaturn } from './createSaturn'
 import { createUranus } from './createUranus'
 import { createVenus } from './createVenus'
 import { type MarkerScreenPosition, projectMarkerToScreen } from './markerScreenPosition'
@@ -60,6 +61,8 @@ function createCentralBodyMesh(id: CentralBodyId): THREE.Mesh {
       return createVenus()
     case 'jupiter':
       return createJupiter()
+    case 'saturn':
+      return createSaturn()
     case 'uranus':
       return createUranus()
     case 'neptune':

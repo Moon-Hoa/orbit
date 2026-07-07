@@ -1,6 +1,9 @@
 import * as THREE from 'three'
 import saturnRingUrl from '../assets/saturn-ring.png'
-import { SATURN_RING_INNER_RADIUS, SATURN_RING_OUTER_RADIUS } from './solarSystemConstants'
+
+/** Saturn's rings, as multiples of whatever radius Saturn's own sphere is rendered at in the calling scene (real rings span ~1.1-2.3 planetary radii). */
+const RING_INNER_RADIUS_MULTIPLIER = 1.2
+const RING_OUTER_RADIUS_MULTIPLIER = 2.3
 
 /**
  * Builds Saturn's ring: a flat annulus with the bundled radial-gradient ring
@@ -11,9 +14,18 @@ import { SATURN_RING_INNER_RADIUS, SATURN_RING_OUTER_RADIUS } from './solarSyste
  * UVs are remapped here to run from 0 (inner edge) to 1 (outer edge).
  * Meant to be added as a child of Saturn's own mesh, so it moves with it for
  * free rather than needing its own position updates in the scene's tick.
+ *
+ * Takes `planetRadius` (Saturn's own rendered sphere radius, in whatever
+ * scene units the caller uses) rather than hardcoding a scale, since the
+ * solar system view and the single-body "Design orbit" view render Saturn
+ * at two entirely different fixed radii (`solarSystemConstants.ts`'s tiered
+ * `PLANET_SCENE_RADII` vs. the body view's uniform `CENTRAL_BODY_RADIUS_SCENE_UNITS`)
+ * - the ring needs to stay proportional to whichever sphere it's attached to.
  */
-export function createSaturnRing(): THREE.Mesh {
-  const geometry = new THREE.RingGeometry(SATURN_RING_INNER_RADIUS, SATURN_RING_OUTER_RADIUS, 64, 1)
+export function createSaturnRing(planetRadius: number): THREE.Mesh {
+  const innerRadius = planetRadius * RING_INNER_RADIUS_MULTIPLIER
+  const outerRadius = planetRadius * RING_OUTER_RADIUS_MULTIPLIER
+  const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 64, 1)
 
   const positions = geometry.attributes.position
   const uvs = geometry.attributes.uv
@@ -21,7 +33,7 @@ export function createSaturnRing(): THREE.Mesh {
   for (let i = 0; i < positions.count; i++) {
     vertex.fromBufferAttribute(positions, i)
     const radius = vertex.length()
-    const u = (radius - SATURN_RING_INNER_RADIUS) / (SATURN_RING_OUTER_RADIUS - SATURN_RING_INNER_RADIUS)
+    const u = (radius - innerRadius) / (outerRadius - innerRadius)
     uvs.setXY(i, u, 1)
   }
   uvs.needsUpdate = true

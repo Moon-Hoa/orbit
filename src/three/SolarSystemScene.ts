@@ -33,6 +33,7 @@ import { type MarkerScreenPosition, projectMarkerToScreen } from './markerScreen
 import {
   MOON_DISPLAY_ORBIT_RADII,
   OUTERMOST_PLANET_SCENE_RADIUS,
+  PLANET_SCENE_RADII,
   SCENE_UNITS_PER_SQRT_AU,
 } from './solarSystemConstants'
 
@@ -165,7 +166,7 @@ export class SolarSystemScene {
 
     for (const planet of PLANET_IDS) {
       const mesh = createPlanet(planet)
-      if (planet === 'saturn') mesh.add(createSaturnRing())
+      if (planet === 'saturn') mesh.add(createSaturnRing(PLANET_SCENE_RADII.saturn))
       this.scene.add(mesh)
       this.planets.set(planet, { mesh })
       this.scene.add(createOrbitRing(this.sampleOrbitRingPoints(planet)))

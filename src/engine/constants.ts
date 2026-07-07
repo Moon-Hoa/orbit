@@ -34,6 +34,12 @@ export const JUPITER_MU_KM3_S2 = 126686531
 /** Jupiter's volumetric mean radius, km - it has no solid surface, so "altitude" for orbit design is measured from this reference radius (the standard convention for gas giants). */
 export const JUPITER_RADIUS_KM = 69911
 
+/** Saturn's standard gravitational parameter (GM), km^3/s^2. */
+export const SATURN_MU_KM3_S2 = 37931206
+
+/** Saturn's volumetric mean radius, km - same "no solid surface" caveat as Jupiter's. */
+export const SATURN_RADIUS_KM = 58232
+
 /** Uranus's standard gravitational parameter (GM), km^3/s^2. */
 export const URANUS_MU_KM3_S2 = 5793951
 

@@ -11,13 +11,24 @@ import {
   MOON_RADIUS_KM,
   NEPTUNE_MU_KM3_S2,
   NEPTUNE_RADIUS_KM,
+  SATURN_MU_KM3_S2,
+  SATURN_RADIUS_KM,
   URANUS_MU_KM3_S2,
   URANUS_RADIUS_KM,
   VENUS_MU_KM3_S2,
   VENUS_RADIUS_KM,
 } from './constants'
 
-export type CentralBodyId = 'earth' | 'moon' | 'mars' | 'mercury' | 'venus' | 'jupiter' | 'uranus' | 'neptune'
+export type CentralBodyId =
+  | 'earth'
+  | 'moon'
+  | 'mars'
+  | 'mercury'
+  | 'venus'
+  | 'jupiter'
+  | 'saturn'
+  | 'uranus'
+  | 'neptune'
 
 export interface CentralBodyInfo {
   id: CentralBodyId
@@ -74,6 +85,13 @@ export const CENTRAL_BODIES: Record<CentralBodyId, CentralBodyInfo> = {
     label: 'Jupiter',
     muKm3S2: JUPITER_MU_KM3_S2,
     radiusKm: JUPITER_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
+  saturn: {
+    id: 'saturn',
+    label: 'Saturn',
+    muKm3S2: SATURN_MU_KM3_S2,
+    radiusKm: SATURN_RADIUS_KM,
     hasEarthOnlyFeatures: false,
   },
   uranus: {

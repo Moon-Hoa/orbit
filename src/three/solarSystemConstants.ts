@@ -48,10 +48,6 @@ export const PLANET_SCENE_RADII: Record<PlanetId, number> = {
   neptune: 1.3,
 }
 
-/** Saturn's rings, as multiples of Saturn's own scene radius (real rings span ~1.1-2.3 planetary radii). */
-export const SATURN_RING_INNER_RADIUS = PLANET_SCENE_RADII.saturn * 1.2
-export const SATURN_RING_OUTER_RADIUS = PLANET_SCENE_RADII.saturn * 2.3
-
 /**
  * Each moon's *displayed* orbital radius, scene units - real moon orbits
  * (converted via the same `auToScene` as the planets) are a tiny
