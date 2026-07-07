@@ -13,6 +13,8 @@ import {
   NEPTUNE_RADIUS_KM,
   SATURN_MU_KM3_S2,
   SATURN_RADIUS_KM,
+  SUN_MU_KM3_S2,
+  SUN_RADIUS_KM,
   URANUS_MU_KM3_S2,
   URANUS_RADIUS_KM,
   VENUS_MU_KM3_S2,
@@ -20,11 +22,12 @@ import {
 } from './constants'
 
 export type CentralBodyId =
+  | 'sun'
+  | 'mercury'
+  | 'venus'
   | 'earth'
   | 'moon'
   | 'mars'
-  | 'mercury'
-  | 'venus'
   | 'jupiter'
   | 'saturn'
   | 'uranus'
@@ -47,10 +50,18 @@ export interface CentralBodyInfo {
 /**
  * Ordered by real distance from the Sun, since that's how `CENTRAL_BODY_IDS`
  * (derived below via `Object.keys`) surfaces bodies everywhere they're
- * listed - the Moon is slotted in right after Earth, as its satellite,
- * rather than at either extreme (see the nav-overhaul issue).
+ * listed - the Sun goes first (everything else orbits it, not the reverse),
+ * and the Moon is slotted in right after Earth, as its satellite, rather
+ * than at either extreme (see the nav-overhaul issue).
  */
 export const CENTRAL_BODIES: Record<CentralBodyId, CentralBodyInfo> = {
+  sun: {
+    id: 'sun',
+    label: 'Sun',
+    muKm3S2: SUN_MU_KM3_S2,
+    radiusKm: SUN_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
   mercury: {
     id: 'mercury',
     label: 'Mercury',

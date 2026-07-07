@@ -1,3 +1,14 @@
+/**
+ * The Sun's standard gravitational parameter (GM), km^3/s^2 - distinct from
+ * `ephemeris.ts`'s `SUN_MU_AU3_PER_DAY2`, which is in a different unit
+ * system (AU^3/day^2) for that module's own purpose (heliocentric planet
+ * positions, not orbit design around a selected central body).
+ */
+export const SUN_MU_KM3_S2 = 132712440018
+
+/** The Sun's nominal (photosphere) radius, km. */
+export const SUN_RADIUS_KM = 696000
+
 /** Earth's standard gravitational parameter (GM), km^3/s^2. */
 export const EARTH_MU_KM3_S2 = 398600.4418
 

@@ -18,6 +18,8 @@ import {
   NEPTUNE_RADIUS_KM,
   SATURN_MU_KM3_S2,
   SATURN_RADIUS_KM,
+  SUN_MU_KM3_S2,
+  SUN_RADIUS_KM,
   URANUS_MU_KM3_S2,
   URANUS_RADIUS_KM,
   VENUS_MU_KM3_S2,
@@ -30,14 +32,15 @@ describe('CENTRAL_BODIES registry', () => {
     expect(DEFAULT_CENTRAL_BODY_ID).toBe('earth')
   })
 
-  it('lists exactly earth, moon, mars, mercury, venus, jupiter, saturn, uranus, and neptune', () => {
+  it('lists exactly sun, earth, moon, mars, mercury, venus, jupiter, saturn, uranus, and neptune', () => {
     expect(new Set(CENTRAL_BODY_IDS)).toEqual(
-      new Set(['earth', 'moon', 'mars', 'mercury', 'venus', 'jupiter', 'saturn', 'uranus', 'neptune']),
+      new Set(['sun', 'earth', 'moon', 'mars', 'mercury', 'venus', 'jupiter', 'saturn', 'uranus', 'neptune']),
     )
   })
 
-  it('orders bodies by real distance from the Sun, with the Moon right after Earth (see the nav-overhaul issue)', () => {
+  it('orders bodies by real distance from the Sun (the Sun itself first), with the Moon right after Earth (see the nav-overhaul issue)', () => {
     expect(CENTRAL_BODY_IDS).toEqual([
+      'sun',
       'mercury',
       'venus',
       'earth',
@@ -57,6 +60,8 @@ describe('CENTRAL_BODIES registry', () => {
   })
 
   it('wires every non-Earth entry to its engine constants', () => {
+    expect(CENTRAL_BODIES.sun.muKm3S2).toBe(SUN_MU_KM3_S2)
+    expect(CENTRAL_BODIES.sun.radiusKm).toBe(SUN_RADIUS_KM)
     expect(CENTRAL_BODIES.moon.muKm3S2).toBe(MOON_MU_KM3_S2)
     expect(CENTRAL_BODIES.moon.radiusKm).toBe(MOON_RADIUS_KM)
     expect(CENTRAL_BODIES.mars.muKm3S2).toBe(MARS_MU_KM3_S2)
@@ -78,6 +83,7 @@ describe('CENTRAL_BODIES registry', () => {
 
 describe('isCentralBodyId', () => {
   it('accepts known ids and rejects everything else', () => {
+    expect(isCentralBodyId('sun')).toBe(true)
     expect(isCentralBodyId('earth')).toBe(true)
     expect(isCentralBodyId('moon')).toBe(true)
     expect(isCentralBodyId('mars')).toBe(true)
@@ -113,6 +119,12 @@ describe('known-answer physical sanity checks (see Moon/Mars view issues)', () =
     const titanSemiMajorAxisKm = 1_221_830
     const periodDays = orbitalPeriodSeconds(titanSemiMajorAxisKm, SATURN_MU_KM3_S2) / 86_400
     expect(periodDays).toBeCloseTo(15.95, 1)
+  })
+
+  it("an orbit at Mercury's real semi-major axis around the Sun matches Mercury's real ~88-day period", () => {
+    const mercurySemiMajorAxisKm = 57_909_227
+    const periodDays = orbitalPeriodSeconds(mercurySemiMajorAxisKm, SUN_MU_KM3_S2) / 86_400
+    expect(periodDays).toBeCloseTo(88, 0)
   })
 
   // A 200 km altitude circular orbit's period, cross-checked against the

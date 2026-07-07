@@ -31,6 +31,7 @@ import { createMercury } from './createMercury'
 import { createMoon } from './createMoon'
 import { createNeptune } from './createNeptune'
 import { createSaturn } from './createSaturn'
+import { createSunBody } from './createSunBody'
 import { createUranus } from './createUranus'
 import { createVenus } from './createVenus'
 import { type MarkerScreenPosition, projectMarkerToScreen } from './markerScreenPosition'
@@ -49,6 +50,8 @@ export const ORBITER_MARKER_COLOR = 0xfacc15
 /** Builds the mesh for a given central body id. */
 function createCentralBodyMesh(id: CentralBodyId): THREE.Mesh {
   switch (id) {
+    case 'sun':
+      return createSunBody()
     case 'earth':
       return createEarth()
     case 'moon':
