@@ -36,6 +36,20 @@ describe('CENTRAL_BODIES registry', () => {
     )
   })
 
+  it('orders bodies by real distance from the Sun, with the Moon right after Earth (see the nav-overhaul issue)', () => {
+    expect(CENTRAL_BODY_IDS).toEqual([
+      'mercury',
+      'venus',
+      'earth',
+      'moon',
+      'mars',
+      'jupiter',
+      'saturn',
+      'uranus',
+      'neptune',
+    ])
+  })
+
   it('only marks Earth as supporting Earth-only features', () => {
     for (const id of CENTRAL_BODY_IDS) {
       expect(CENTRAL_BODIES[id].hasEarthOnlyFeatures, id).toBe(id === 'earth')

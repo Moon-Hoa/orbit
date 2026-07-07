@@ -261,4 +261,14 @@ describe('SolarSystemViewer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Body view' }))
     expect(onViewModeChange).toHaveBeenCalledWith('body')
   })
+
+  it('renames the mode button to "Solar system view" and opens a planet-focus dropdown from it, calling scene.focusOnPlanet', () => {
+    render(<SolarSystemViewer />)
+
+    // Already in solar-system view, so clicking opens the dropdown instead of switching views.
+    fireEvent.click(screen.getByRole('button', { name: 'Solar system view' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Jupiter' }))
+
+    expect(focusOnPlanetMock).toHaveBeenCalledWith('jupiter')
+  })
 })

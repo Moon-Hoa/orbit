@@ -32,6 +32,11 @@ function StatRow({ label, value }: StatRowProps) {
  * altitude-driven (rather than picking two presets) since several presets
  * are eccentric, and a Hohmann transfer is only defined between circular
  * orbits.
+ *
+ * Rendered as a subsection inside `StatsPanel`'s single bottom-left card
+ * (see the settings-overhaul issue) rather than its own floating card, so
+ * it has no background/positioning of its own - just a top border to
+ * separate it from whatever's above it.
  */
 export function HohmannPlanner() {
   const [fromAltitudeKm, setFromAltitudeKm] = useState(DEFAULT_FROM_ALTITUDE_KM)
@@ -45,7 +50,7 @@ export function HohmannPlanner() {
   }, [fromAltitudeKm, toAltitudeKm])
 
   return (
-    <div className="relative flex max-h-[45vh] w-full flex-col gap-2 overflow-y-auto rounded-lg bg-slate-900/80 p-3 text-xs backdrop-blur lg:absolute lg:right-4 lg:bottom-4 lg:w-72 lg:max-w-[calc(100vw-2rem)]">
+    <div className="mt-2 flex flex-col gap-2 border-t border-slate-700 pt-2 text-xs">
       <h2 className="text-sm font-semibold text-slate-100">Hohmann transfer</h2>
       <p className="text-slate-400">
         Circular, coplanar orbits only — no plane-change delta-v, no eccentric orbits.

@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { OrbitalElements } from '../engine'
+import { CENTRAL_BODIES, CENTRAL_BODY_IDS, type OrbitalElements } from '../engine'
 import { ElementPanel } from './ElementPanel'
+import { maxSemiMajorAxisKm } from './semiMajorAxisBounds'
 
 const baseElements: OrbitalElements = {
   semiMajorAxisKm: 6786.137,
@@ -88,5 +89,24 @@ describe('ElementPanel', () => {
   it('renders no presets when given an empty presets list (e.g. a non-Earth body)', () => {
     renderPanel({ presets: [] })
     expect(screen.queryByRole('button', { name: 'ISS' })).not.toBeInTheDocument()
+  })
+
+  it.each(CENTRAL_BODY_IDS)(
+    "keeps the semi-major-axis slider's ceiling well clear of %s's own radius",
+    (id) => {
+      const radiusKm = CENTRAL_BODIES[id].radiusKm
+      // A real, currently-fixed bug: Jupiter/Saturn's radii exceed the old
+      // flat 50,000 km ceiling, making every reachable orbit intersect the
+      // planet. A 2x-radius margin is a conservative floor - well under the
+      // actual ~7x/50,000 km a body gets, but enough to catch a regression
+      // that shrinks the multiplier or drops the floor for small bodies.
+      expect(maxSemiMajorAxisKm(radiusKm)).toBeGreaterThan(radiusKm * 2)
+    },
+  )
+
+  it('raises the semi-major-axis slider ceiling for a body whose radius exceeds the flat 50,000 km floor (Jupiter)', () => {
+    renderPanel({ bodyRadiusKm: CENTRAL_BODIES.jupiter.radiusKm })
+    const maxAttr = Number(screen.getByLabelText('a slider').getAttribute('max'))
+    expect(maxAttr).toBeGreaterThan(CENTRAL_BODIES.jupiter.radiusKm)
   })
 })

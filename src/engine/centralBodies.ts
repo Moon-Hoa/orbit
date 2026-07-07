@@ -44,7 +44,27 @@ export interface CentralBodyInfo {
   hasEarthOnlyFeatures: boolean
 }
 
+/**
+ * Ordered by real distance from the Sun, since that's how `CENTRAL_BODY_IDS`
+ * (derived below via `Object.keys`) surfaces bodies everywhere they're
+ * listed - the Moon is slotted in right after Earth, as its satellite,
+ * rather than at either extreme (see the nav-overhaul issue).
+ */
 export const CENTRAL_BODIES: Record<CentralBodyId, CentralBodyInfo> = {
+  mercury: {
+    id: 'mercury',
+    label: 'Mercury',
+    muKm3S2: MERCURY_MU_KM3_S2,
+    radiusKm: MERCURY_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
+  venus: {
+    id: 'venus',
+    label: 'Venus',
+    muKm3S2: VENUS_MU_KM3_S2,
+    radiusKm: VENUS_RADIUS_KM,
+    hasEarthOnlyFeatures: false,
+  },
   earth: {
     id: 'earth',
     label: 'Earth',
@@ -64,20 +84,6 @@ export const CENTRAL_BODIES: Record<CentralBodyId, CentralBodyInfo> = {
     label: 'Mars',
     muKm3S2: MARS_MU_KM3_S2,
     radiusKm: MARS_RADIUS_KM,
-    hasEarthOnlyFeatures: false,
-  },
-  mercury: {
-    id: 'mercury',
-    label: 'Mercury',
-    muKm3S2: MERCURY_MU_KM3_S2,
-    radiusKm: MERCURY_RADIUS_KM,
-    hasEarthOnlyFeatures: false,
-  },
-  venus: {
-    id: 'venus',
-    label: 'Venus',
-    muKm3S2: VENUS_MU_KM3_S2,
-    radiusKm: VENUS_RADIUS_KM,
     hasEarthOnlyFeatures: false,
   },
   jupiter: {

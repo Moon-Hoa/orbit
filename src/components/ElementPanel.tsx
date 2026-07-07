@@ -4,6 +4,7 @@ import { degToRad, radToDeg } from './angleUnits'
 import type { BulkAddSummary } from './companions'
 import { ElementSlider } from './ElementSlider'
 import { PresetSelector } from './PresetSelector'
+import { maxSemiMajorAxisKm } from './semiMajorAxisBounds'
 
 interface ElementPanelProps {
   elements: OrbitalElements
@@ -50,7 +51,7 @@ export function ElementPanel({
         label="a"
         unit="km"
         min={bodyRadiusKm + 200}
-        max={50000}
+        max={maxSemiMajorAxisKm(bodyRadiusKm)}
         step={1}
         value={elements.semiMajorAxisKm}
         onChange={(semiMajorAxisKm) => onChange({ ...elements, semiMajorAxisKm })}

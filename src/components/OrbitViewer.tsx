@@ -31,15 +31,12 @@ import {
 } from '../three/OrbitScene'
 import { ISS_LIKE_ELEMENTS } from '../three/sampleOrbits'
 import { type UnitSystem, formatDistanceKm, formatSpeedKmS } from './distanceUnits'
-import { AccessibleDataView } from './AccessibleDataView'
-import { CentralBodySelector } from './CentralBodySelector'
 import { ClosestApproachPanel } from './ClosestApproachPanel'
 import { ElementPanel } from './ElementPanel'
 import { ExportControls } from './ExportControls'
 import { formatElapsed } from './formatElapsed'
 import { GroundStationPanel } from './GroundStationPanel'
 import { GroundTrackView, type GroundTrack } from './GroundTrackView'
-import { HohmannPlanner } from './HohmannPlanner'
 import { MarkerTooltip } from './MarkerTooltip'
 import { ModeToggle, type ViewerMode } from './ModeToggle'
 import { PlaybackControls } from './PlaybackControls'
@@ -98,9 +95,6 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
   const currentAltitudeRef = useRef<HTMLSpanElement>(null)
   const currentSpeedRef = useRef<HTMLSpanElement>(null)
   const currentEclipseStatusRef = useRef<HTMLSpanElement>(null)
-  const dataViewAltitudeRef = useRef<HTMLTableCellElement>(null)
-  const dataViewSpeedRef = useRef<HTMLTableCellElement>(null)
-  const dataViewEclipseStatusRef = useRef<HTMLTableCellElement>(null)
   const isApplyingHistoryRef = useRef(false)
   const pendingHistoryPushRef = useRef(false)
   const companionsRef = useRef<CompanionEntry[]>([])
@@ -127,7 +121,6 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
   const [closestApproach, setClosestApproach] = useState<ClosestApproachResult | null>(null)
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(loadStoredUnitSystem)
   const [enableJ2, setEnableJ2] = useState(false)
-  const [isDataViewOpen, setIsDataViewOpen] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [visibleGroundStationCategories, setVisibleGroundStationCategories] = useState(
     () => new Set<string>(),
@@ -243,18 +236,13 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
         }
         const altitudeText = formatDistanceKm(altitudeKm, unitSystemRef.current)
         if (currentAltitudeRef.current) currentAltitudeRef.current.textContent = altitudeText
-        if (dataViewAltitudeRef.current) dataViewAltitudeRef.current.textContent = altitudeText
 
         const speedText = formatSpeedKmS(speedKmS, unitSystemRef.current)
         if (currentSpeedRef.current) currentSpeedRef.current.textContent = speedText
-        if (dataViewSpeedRef.current) dataViewSpeedRef.current.textContent = speedText
 
         const eclipseText =
           shadowFraction === null ? '—' : shadowFraction > 0 ? 'In eclipse' : 'In sunlight'
         if (currentEclipseStatusRef.current) currentEclipseStatusRef.current.textContent = eclipseText
-        if (dataViewEclipseStatusRef.current) {
-          dataViewEclipseStatusRef.current.textContent = eclipseText
-        }
       },
       onGroundTrackUpdate: (tracks) => {
         setGroundTracks(
@@ -551,22 +539,7 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
         div.
       */}
       <div className="relative flex flex-col gap-2 p-4 pb-32 lg:contents lg:p-0 lg:pb-0">
-        <AccessibleDataView
-        isOpen={isDataViewOpen}
-        onToggle={() => setIsDataViewOpen((open) => !open)}
-        mode={mode}
-        primaryLabel={primaryLabel}
-        selectedTle={isTrackingReal ? selectedTle : null}
-        elements={elements}
-        currentGeodetic={currentGeodetic}
-        currentAltitudeRef={dataViewAltitudeRef}
-        currentSpeedRef={dataViewSpeedRef}
-        currentEclipseStatusRef={dataViewEclipseStatusRef}
-        showEclipseStatus={isTrackingReal && focusedId === PRIMARY_OBJECT_ID}
-        centralBodyLabel={currentBody.label}
-      />
-
-      {mode === 'design' ? (
+        {mode === 'design' ? (
         <ElementPanel
           elements={elements}
           onChange={setElements}
@@ -598,6 +571,10 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
       <div className="relative flex max-h-[45vh] flex-col gap-2 overflow-y-auto lg:absolute lg:bottom-4 lg:left-4 lg:max-w-[calc(100vw-2rem)]">
         <StatsPanel
           orbitShape={orbitShape}
+          mode={mode}
+          elements={elements}
+          selectedTle={isTrackingReal ? selectedTle : null}
+          currentGeodetic={currentGeodetic}
           currentAltitudeRef={currentAltitudeRef}
           currentSpeedRef={currentSpeedRef}
           currentEclipseStatusRef={currentEclipseStatusRef}
@@ -610,15 +587,39 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
           onRemoveCompanion={removeCompanion}
           muKm3S2={currentBody.muKm3S2}
           bodyRadiusKm={currentBody.radiusKm}
+          centralBodyLabel={currentBody.label}
+          showHohmannPlanner={mode === 'design' && currentBody.hasEarthOnlyFeatures}
         />
         {companions.length === 1 && <ClosestApproachPanel result={closestApproach} />}
       </div>
       {isTrackingReal && <GroundStationPanel tle={selectedTle} presetLocation={passPredictionRequest} />}
-      {mode === 'design' && currentBody.hasEarthOnlyFeatures && <HohmannPlanner />}
-      <div className="relative flex max-h-[70vh] flex-col items-end gap-2 overflow-y-auto lg:absolute lg:top-4 lg:right-4 lg:max-w-[calc(100vw-2rem)]">
+      {/*
+        `fixed` (not `relative`/`lg:absolute`) at every breakpoint, so this
+        cluster stays pinned to the viewport corner regardless of how much
+        the page itself has scrolled - on mobile, where every panel stacks
+        into one scrollable column, a `relative` nav bar would otherwise
+        scroll away with everything else below it. Desktop never actually
+        scrolls today, so this is a no-op change there, but guards against
+        it too (e.g. a short/zoomed window).
+
+        No overflow clipping on *this* wrapper - `ViewModeSelector`'s and
+        `SettingsPanel`'s dropdowns are absolutely-positioned descendants
+        that render *outside* the button row's own flow-content box, and an
+        `overflow-auto` ancestor would clip them to invisibility despite
+        their own layout rect looking perfectly sane (clipping affects paint,
+        not `getBoundingClientRect()`). The ground-track/export cluster below
+        gets its own scroll cap on its own sub-div instead, since it doesn't
+        need to host a dropdown and stacks below the button row via normal
+        flow either way.
+      */}
+      <div className="fixed top-4 right-4 z-20 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2">
         <div className="flex flex-wrap justify-end gap-2">
-          <ViewModeSelector viewMode="body" onChange={onViewModeChange} />
-          <CentralBodySelector centralBody={centralBodyId} onChange={changeCentralBody} />
+          <ViewModeSelector
+            viewMode="body"
+            onChange={onViewModeChange}
+            centralBody={centralBodyId}
+            onCentralBodyChange={changeCentralBody}
+          />
           <ModeToggle
             mode={mode}
             onChange={(nextMode) => {
@@ -643,7 +644,7 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
           />
         </div>
         {currentBody.hasEarthOnlyFeatures && (
-          <>
+          <div className="flex max-h-[60vh] w-full flex-col items-end gap-2 overflow-y-auto">
             <GroundTrackView tracks={groundTracks} subsolarPoint={subsolarPoint} />
             <ExportControls
               label={primaryLabel}
@@ -652,7 +653,7 @@ export function OrbitViewer({ onViewModeChange = () => {} }: OrbitViewerProps = 
               enableJ2={enableJ2}
               tle={selectedTle}
             />
-          </>
+          </div>
         )}
       </div>
       </div>

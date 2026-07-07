@@ -108,7 +108,8 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
         )}
       </div>
 
-      <div className="absolute top-4 right-4 flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-end gap-2">
+      {/* `fixed` (not `absolute`) so this stays pinned to the viewport corner even if this view ever grows a scrollable ancestor - see the nav-overhaul issue. */}
+      <div className="fixed top-4 right-4 z-20 flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-end gap-2">
         {focusedPlanet && (
           <button
             type="button"
@@ -119,7 +120,12 @@ export function SolarSystemViewer({ onViewModeChange = () => {} }: SolarSystemVi
           </button>
         )}
         <OtherBodiesToggle isOn={otherBodiesVisible} onToggle={setOtherBodiesVisible} />
-        <ViewModeSelector viewMode="solar-system" onChange={onViewModeChange} />
+        <ViewModeSelector
+          viewMode="solar-system"
+          onChange={onViewModeChange}
+          focusedPlanet={focusedPlanet}
+          onFocusPlanet={(planet) => sceneRef.current?.focusOnPlanet(planet)}
+        />
       </div>
 
       <SolarSystemTimeControls

@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { EARTH_RADIUS_KM, MOON_MU_KM3_S2, MOON_RADIUS_KM } from '../engine'
+import { EARTH_RADIUS_KM, MOON_MU_KM3_S2, MOON_RADIUS_KM, type OrbitalElements } from '../engine'
+import type { TleRecord } from '../satellite'
 import { PRIMARY_OBJECT_ID } from '../three/OrbitScene'
 import type { CompanionEntry } from './companions'
 import { StatsPanel, type OrbitShape } from './StatsPanel'
@@ -9,6 +10,22 @@ import { StatsPanel, type OrbitShape } from './StatsPanel'
 const issLikeShape: OrbitShape = {
   semiMajorAxisKm: EARTH_RADIUS_KM + 408,
   eccentricity: 0.0007,
+}
+
+const designElements: OrbitalElements = {
+  semiMajorAxisKm: EARTH_RADIUS_KM + 408,
+  eccentricity: 0.0007,
+  inclinationRad: (51.6 * Math.PI) / 180,
+  raanRad: (45 * Math.PI) / 180,
+  argOfPerigeeRad: (30 * Math.PI) / 180,
+  trueAnomalyRad: 0,
+}
+
+const ISS_TLE: TleRecord = {
+  name: 'ISS (ZARYA)',
+  noradId: '25544',
+  line1: '1 25544U 98067A   26182.50817465  .00006185  00000+0  11827-3 0  9996',
+  line2: '2 25544  51.6311 229.1989 0004224 255.0896 104.9625 15.49503254573972',
 }
 
 const DUMMY_SOURCE: CompanionEntry['source'] = {
@@ -27,6 +44,10 @@ function renderPanel(overrides: Partial<Parameters<typeof StatsPanel>[0]> = {}) 
   return render(
     <StatsPanel
       orbitShape={issLikeShape}
+      mode="design"
+      elements={designElements}
+      selectedTle={null}
+      currentGeodetic={null}
       currentAltitudeRef={createRef()}
       currentSpeedRef={createRef()}
       currentEclipseStatusRef={createRef()}
@@ -98,7 +119,9 @@ describe('StatsPanel', () => {
 
     it('lists the primary object and every companion', () => {
       renderPanel({ companions })
-      expect(screen.getByText('Design orbit')).toBeInTheDocument()
+      // "Design orbit" legitimately appears more than once now (Mode row,
+      // Tracked object row, and the primary's own chip label).
+      expect(screen.getAllByText('Design orbit').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('ISS (ZARYA)')).toBeInTheDocument()
       expect(screen.getByText('GEO')).toBeInTheDocument()
     })
@@ -130,6 +153,65 @@ describe('StatsPanel', () => {
       expect(screen.queryByLabelText('Stop tracking Design orbit')).not.toBeInTheDocument()
       fireEvent.click(screen.getByLabelText('Stop tracking GEO'))
       expect(onRemoveCompanion).toHaveBeenCalledWith('design:geo')
+    })
+  })
+
+  // Ported from the now-removed, always-visible-toggle AccessibleDataView -
+  // merged into this single panel per the settings-overhaul issue.
+  describe('merged accessible-data content', () => {
+    it('defaults the central body row to Earth (see Moon/Mars view issues)', () => {
+      renderPanel()
+      expect(screen.getByText('Earth')).toBeInTheDocument()
+    })
+
+    it('reflects an overridden central body label', () => {
+      renderPanel({ centralBodyLabel: 'Moon' })
+      expect(screen.getByText('Moon')).toBeInTheDocument()
+    })
+
+    it('shows the design elements in design mode', () => {
+      renderPanel({ mode: 'design', elements: designElements })
+      expect(screen.getByText(`${(EARTH_RADIUS_KM + 408).toFixed(3)} km`)).toBeInTheDocument()
+      expect(screen.getByText('51.60°')).toBeInTheDocument()
+    })
+
+    it('shows the tracked satellite identity and NORAD ID, without element rows, in track-real mode', () => {
+      renderPanel({
+        mode: 'track-real',
+        primaryLabel: 'ISS (ZARYA)',
+        selectedTle: ISS_TLE,
+      })
+
+      expect(screen.getByText('ISS (ZARYA) (NORAD 25544)')).toBeInTheDocument()
+      expect(screen.queryByText('51.60°')).not.toBeInTheDocument()
+    })
+
+    it('shows the current geodetic position when available', () => {
+      renderPanel({
+        currentGeodetic: { latitudeRad: (12.5 * Math.PI) / 180, longitudeRad: (-45 * Math.PI) / 180, altitudeKm: 408 },
+      })
+
+      expect(screen.getByText('12.500°')).toBeInTheDocument()
+      expect(screen.getByText('-45.000°')).toBeInTheDocument()
+    })
+
+    it('omits the latitude/longitude rows when no geodetic position is available', () => {
+      renderPanel({ currentGeodetic: null })
+      expect(screen.queryByText('Latitude')).not.toBeInTheDocument()
+      expect(screen.queryByText('Longitude')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Hohmann transfer subsection', () => {
+    it('is hidden by default', () => {
+      renderPanel()
+      expect(screen.queryByText('Hohmann transfer')).not.toBeInTheDocument()
+    })
+
+    it('shows when showHohmannPlanner is true', () => {
+      renderPanel({ showHohmannPlanner: true })
+      expect(screen.getByText('Hohmann transfer')).toBeInTheDocument()
+      expect(screen.getByLabelText('From altitude')).toBeInTheDocument()
     })
   })
 })

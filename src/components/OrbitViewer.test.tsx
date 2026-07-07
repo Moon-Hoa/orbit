@@ -375,15 +375,12 @@ describe('OrbitViewer', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Tracking ISS (ZARYA), NORAD 25544')
   })
 
-  it('toggles the accessible data table via keyboard-operable button', () => {
+  it('shows the merged Stats panel content without needing to toggle anything (see the settings-overhaul issue)', () => {
     render(<OrbitViewer />)
 
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Show data table' }))
-    expect(screen.getByRole('table')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Hide data table' }))
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.getByText('Central body')).toBeInTheDocument()
+    expect(screen.getByText('Mode')).toBeInTheDocument()
+    expect(screen.getByText('Tracked object')).toBeInTheDocument()
   })
 
   it('renders the ground track when the scene reports an update', () => {
@@ -910,21 +907,30 @@ describe('OrbitViewer all satellites', () => {
   })
 })
 
+/** Opens the body-view dropdown (view mode is already 'body' by default) and clicks the given body's entry - the dropdown auto-closes after a selection, so call this again for each subsequent body switch. */
+function selectCentralBody(label: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Body view' }))
+  fireEvent.click(screen.getByRole('button', { name: label }))
+}
+
 describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
   it('calls scene.setCentralBody when a different body is selected', () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
 
     expect(setCentralBodyMock).toHaveBeenCalledWith('moon')
-    expect(screen.getByRole('button', { name: 'Moon' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('status')).toHaveTextContent('Moon selected')
+
+    // Reopen the dropdown (it auto-closed after selecting) to confirm it now reflects the new selection.
+    fireEvent.click(screen.getByRole('button', { name: 'Body view' }))
+    expect(screen.getByRole('button', { name: 'Moon' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('hides Earth-only presets and shows the body radius in the perigee warning once a non-Earth body is selected', () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
 
     expect(screen.queryByRole('button', { name: 'ISS' })).not.toBeInTheDocument()
   })
@@ -932,7 +938,7 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
   it('disables "Track real satellite" once a non-Earth body is selected', () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
 
     expect(screen.getByRole('button', { name: 'Track real satellite' })).toBeDisabled()
   })
@@ -947,7 +953,7 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
       'true',
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
 
     expect(screen.getByRole('button', { name: 'Design orbit' })).toHaveAttribute('aria-pressed', 'true')
   })
@@ -955,7 +961,7 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
   it('hides ground-station/all-satellites/ground-track/export controls once a non-Earth body is selected', () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
     fireEvent.click(screen.getByLabelText('Settings'))
 
     expect(screen.queryByRole('button', { name: 'All satellites' })).not.toBeInTheDocument()
@@ -967,8 +973,8 @@ describe('OrbitViewer central body (see Moon/Mars view issues)', () => {
   it('re-shows Earth-only controls when switching back to Earth', () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Earth' }))
+    selectCentralBody('Moon')
+    selectCentralBody('Earth')
     fireEvent.click(screen.getByLabelText('Settings'))
 
     expect(screen.getByRole('button', { name: 'All satellites' })).toBeInTheDocument()
@@ -981,7 +987,7 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
   it('shows the "Surface objects" section instead of ground-station controls once a non-Earth body is selected', () => {
     render(<OrbitViewer />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
     fireEvent.click(screen.getByLabelText('Settings'))
 
     expect(screen.getByText('Surface objects')).toBeInTheDocument()
@@ -996,7 +1002,7 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
 
   it('lists Moon categories and calls scene.setCelestialObjectCategoryVisible when one is toggled', () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
     fireEvent.click(screen.getByLabelText('Settings'))
 
     const row = screen.getByText('Apollo landings').closest('label')
@@ -1007,7 +1013,7 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
 
   it('lists Mars categories once Mars is selected', () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Mars' }))
+    selectCentralBody('Mars')
     fireEvent.click(screen.getByLabelText('Settings'))
 
     expect(screen.getByText('Landers & rovers')).toBeInTheDocument()
@@ -1016,7 +1022,7 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
 
   it('calls scene.setCelestialOrbitersVisible when the orbiters checkbox is toggled', () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
     fireEvent.click(screen.getByLabelText('Settings'))
 
     const row = screen.getByText('Active orbiters').closest('label')
@@ -1027,11 +1033,11 @@ describe('OrbitViewer celestial object catalogs (see Moon/Mars surface catalog i
 
   it('resets category visibility and the selected object when switching bodies', () => {
     render(<OrbitViewer />)
-    fireEvent.click(screen.getByRole('button', { name: 'Moon' }))
+    selectCentralBody('Moon')
     fireEvent.click(screen.getByLabelText('Settings'))
     fireEvent.click(screen.getByText('Apollo landings').closest('label')!.querySelector('input')!)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mars' }))
+    selectCentralBody('Mars')
 
     for (const checkbox of screen.getAllByRole('checkbox')) {
       expect(checkbox).not.toBeChecked()

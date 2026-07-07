@@ -6,28 +6,23 @@ interface CentralBodySelectorProps {
 }
 
 /**
- * Toggle between the bodies the 3D scene can be centered on (Earth, Moon,
- * Mars, Mercury, Venus, Jupiter, Uranus, Neptune). Scrolls horizontally
- * rather than clipping - with 8 bodies (up from the original 3), a plain
- * `overflow-hidden` row would silently cut buttons off past the container's
- * width, especially on narrow viewports, making some bodies unreachable.
- * `max-w-[calc(100vw-2rem)]` (not `max-w-full`) since this sits in a
- * `flex-wrap` layout whose own width is shrink-to-fit rather than a fixed
- * box - a percentage-based max-width has nothing definite to resolve
- * against there, so this row would otherwise just grow past the viewport
- * instead of scrolling (same viewport-relative pattern `OrbitViewer`'s other
- * floating panels already use).
+ * The body-view dropdown menu (Mercury, Venus, Earth, Moon, Mars, Jupiter,
+ * Saturn, Uranus, Neptune, in real order from the Sun) - opened from the
+ * "Body view" button in `ViewModeSelector`, which owns the open/closed
+ * state. A vertical list rather than a horizontal button row, so it scales
+ * to any number of bodies via ordinary vertical scroll instead of needing
+ * its own horizontal-scroll workaround.
  */
 export function CentralBodySelector({ centralBody, onChange }: CentralBodySelectorProps) {
   return (
-    <div className="flex max-w-[calc(100vw-2rem)] overflow-x-auto rounded-lg bg-slate-900/80 backdrop-blur">
+    <div className="flex max-h-[70vh] w-48 flex-col overflow-y-auto rounded-lg bg-slate-900/95 py-1 text-sm shadow-lg backdrop-blur">
       {CENTRAL_BODY_IDS.map((id) => (
         <button
           key={id}
           type="button"
           onClick={() => onChange(id)}
           aria-pressed={centralBody === id}
-          className={`shrink-0 px-3 py-1.5 text-sm ${
+          className={`px-3 py-1.5 text-left ${
             centralBody === id ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-800'
           }`}
         >
